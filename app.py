@@ -745,6 +745,142 @@ async def create_library_test(request: Request):
     return {"message": "Test kaydı oluşturuldu", "test_id": test_id}
 
 
+@app.put("/api/library/tests/{test_id}")
+@app.post("/api/library/tests/{test_id}")
+async def update_library_test(test_id: int, request: Request):
+    current_username = _require_admin(request)
+
+    form = await request.form()
+    test_name = str(form.get("test_name") or "").strip()
+    test_description = str(form.get("test_description") or "").strip()
+    points_json = str(form.get("points_json") or "")
+    image = form.get("image")
+
+    if not test_name:
+        raise HTTPException(status_code=400, detail="Test adı zorunlu")
+
+    try:
+        parsed_points = json.loads(points_json)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Test noktası verisi hatalı") from exc
+
+    if not isinstance(parsed_points, list) or not parsed_points:
+        raise HTTPException(status_code=400, detail="En az bir test noktası gerekli")
+
+    with _db_connection() as connection:
+        test_row = connection.execute(
+            "SELECT id FROM tests WHERE id = ?", (test_id,)
+        ).fetchone()
+        if not test_row:
+            raise HTTPException(status_code=404, detail="Test bulunamadı")
+
+        has_new_image = isinstance(image, (UploadFile, StarletteUploadFile)) and getattr(image, "filename", "")
+        if has_new_image:
+            card_image_bytes = await image.read()
+            if card_image_bytes:
+                connection.execute(
+                    "UPDATE tests SET name=?, description=?, image_data=? WHERE id=?",
+                    (test_name, test_description, card_image_bytes, test_id),
+                )
+            else:
+                connection.execute(
+                    "UPDATE tests SET name=?, description=? WHERE id=?",
+                    (test_name, test_description, test_id),
+                )
+        else:
+            connection.execute(
+                "UPDATE tests SET name=?, description=? WHERE id=?",
+                (test_name, test_description, test_id),
+            )
+
+        existing_ids = {
+            row["id"]
+            for row in connection.execute(
+                "SELECT id FROM testpoints WHERE test_id = ?", (test_id,)
+            ).fetchall()
+        }
+
+        submitted_ids = set()
+
+        for index, point in enumerate(parsed_points, start=1):
+            point_id = point.get("id")
+            point_name = str(point.get("name") or f"TP{index}")
+            x = float(point.get("x", 0))
+            y = float(point.get("y", 0))
+            point_description = str(point.get("description") or "")
+
+            point_image = form.get(f"point_image_{index}")
+            has_point_image = isinstance(point_image, (UploadFile, StarletteUploadFile)) and getattr(point_image, "filename", "")
+
+            if point_id and int(point_id) in existing_ids:
+                submitted_ids.add(int(point_id))
+                if has_point_image:
+                    point_image_bytes = await point_image.read()
+                    if point_image_bytes:
+                        try:
+                            extracted = testpoint_gorselini_isle(gorsel_bytes=point_image_bytes)
+                        except Exception as exc:
+                            raise HTTPException(status_code=400, detail=f"TP{index} işleme hatası: {exc}") from exc
+                        connection.execute(
+                            """
+                            UPDATE testpoints
+                            SET name=?, x=?, y=?, description=?, v=?, f=?, r=?, tol=?, grafik=?, sort_order=?
+                            WHERE id=?
+                            """,
+                            (
+                                point_name, x, y, point_description,
+                                str(extracted.get("v", "")), str(extracted.get("f", "")),
+                                str(extracted.get("r", "")), str(extracted.get("tol", "")),
+                                str(extracted.get("grafik", "")), index, int(point_id),
+                            ),
+                        )
+                    else:
+                        connection.execute(
+                            "UPDATE testpoints SET name=?, x=?, y=?, description=?, sort_order=? WHERE id=?",
+                            (point_name, x, y, point_description, index, int(point_id)),
+                        )
+                else:
+                    connection.execute(
+                        "UPDATE testpoints SET name=?, x=?, y=?, description=?, sort_order=? WHERE id=?",
+                        (point_name, x, y, point_description, index, int(point_id)),
+                    )
+            else:
+                if not has_point_image:
+                    raise HTTPException(status_code=400, detail=f"Yeni nokta '{point_name}' için görsel zorunlu")
+                point_image_bytes = await point_image.read()
+                if not point_image_bytes:
+                    raise HTTPException(status_code=400, detail=f"'{point_name}' görseli okunamadı")
+                try:
+                    extracted = testpoint_gorselini_isle(gorsel_bytes=point_image_bytes)
+                except Exception as exc:
+                    raise HTTPException(status_code=400, detail=f"TP{index} işleme hatası: {exc}") from exc
+                connection.execute(
+                    """
+                    INSERT INTO testpoints (test_id, name, x, y, v, f, r, tol, grafik, description, sort_order)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        test_id, point_name, x, y,
+                        str(extracted.get("v", "")), str(extracted.get("f", "")),
+                        str(extracted.get("r", "")), str(extracted.get("tol", "")),
+                        str(extracted.get("grafik", "")), point_description, index,
+                    ),
+                )
+
+        ids_to_delete = existing_ids - submitted_ids
+        for del_id in ids_to_delete:
+            connection.execute("DELETE FROM testpoints WHERE id = ?", (del_id,))
+
+    _log_action(
+        actor=current_username,
+        action="library_test_updated",
+        target=str(test_id),
+        details={"name": test_name, "point_count": len(parsed_points)},
+    )
+
+    return {"message": "Test güncellendi", "test_id": test_id}
+
+
 _init_db()
 
 @app.get("/run")

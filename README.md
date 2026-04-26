@@ -1,82 +1,283 @@
-Motor Gereksinimi: Pytesseract'in çalışması için sistemde Tesseract OCR motorunun kurulu olması gerekir.
+## VI Library - Kullanim Kilavuzu
 
-Kullanıcı bilgileri SQLite veritabanı dosyasında saklanır: vilib.db
+Bu proje UCE-CTL321L Component Tester cihazına veri tabanı özelliği kazandırmak için oluşturulmuştur. UCE-CTL321L chiazının ürettiği ekran görüntüleri temizlenerek grafik bilgisi ve ölçüm değerleri sayısal hale getirilir. Üretilen değerler Elektrünik Kart görseli üzerinde işaretlenen test point noktalarına atanarak veri tabanına kayıt edilir. Test aşamasında cihazın ürettiği test sonuçları ile veri tabanındaki kayıtlar karşılaştırılarak arıza kontrolü yapılır.
 
-## Baslangic
+## Gereksinimler
 
-1. İlk kullanımda admin hesabı oluşturun:
+1. Python 3.10+
+2. Tesseract OCR motoru (pytesseract icin zorunlu)
+3. Sanal ortam (onerilir)
 
+Linux icin ornek Tesseract kurulumu:
+
+```bash
+sudo apt update
+sudo apt install -y tesseract-ocr
+```
+
+Windows icin ornek Tesseract kurulumu (PowerShell):
+
+```powershell
+winget install UB-Mannheim.TesseractOCR
+```
+
+Alternatif olarak Tesseract'i manuel kurabilirsiniz.
+
+## Kurulum
+
+1. Sanal ortami olusturun ve aktive edin:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
+Windows (PowerShell):
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+2. Bagimliliklari yukleyin:
+
+```bash
+pip install -r requirements.txt
+```
+
+Windows icin de ayni komut gecerlidir.
+
+3. Ilk kullanimda admin hesabi olusturun:
+
+```bash
 python run.py create-admin --username admin --password sifreniz
+```
 
-2. Uygulamayı başlatın:
+Tesseract PATH'te degilse (ozellikle Windows), calistirmadan once komut yolunu tanimlayin:
 
+Linux/macOS:
+
+```bash
+export TESSERACT_CMD=/usr/bin/tesseract
+```
+
+Windows (PowerShell):
+
+```powershell
+$env:TESSERACT_CMD = "C:\Program Files\Tesseract-OCR\tesseract.exe"
+```
+
+## Uygulamayi Baslatma
+
+Standart calistirma:
+
+```bash
 python run.py
+```
 
-Varsayılan olarak uygulama artik 0.0.0.0:8086 adresinde dinler ve ayni agdaki baska cihazlardan da erisilebilir.
-Farkli host/port icin:
+Windows'ta da ayni komut kullanilir.
 
+Uygulama varsayilan olarak 0.0.0.0:8086 uzerinden dinler.
+
+Farkli host/port ile:
+
+```bash
 python run.py --host 0.0.0.0 --port 8086
+```
 
-3. Tarayıcıda önce giriş sayfası açılır. Admin bilgilerinizle giriş yapınca ana sayfaya yönlendirilirsiniz.
+Gelistirme modunda otomatik yeniden yukleme ile:
 
-## Çalıştırma Notu
+```bash
+python run.py --reload
+```
 
-- Bu proje FastAPI ile çalışır.
-- Uygulamayı başlatmak için kullanılacak komut: python run.py
-- Django komutu (python backend/manage.py runserver ...) bu proje için geçersizdir ve sayfa/routing davranışını bozabilir.
+Not: Bu proje FastAPI ile calisir. python backend/manage.py runserver komutu bu proje icin kullanilmamalidir.
 
-## Login ve Çıkış Akışı
+## Hizli Baslatma Ozeti
 
-- Login sayfası: /login
-- Oturum yoksa ana sayfa (/) otomatik olarak /login sayfasına yönlendirir.
-- Ana sayfadaki Çıkış butonu /logout üzerinden oturumu kapatır ve tekrar /login sayfasına yönlendirir.
+Linux:
 
-## Üst Bar (Ana Sayfa)
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python run.py create-admin --username admin --password sifreniz
+python run.py
+```
 
-- Ana sayfada top bar içinde şu butonlar bulunur: Kütüphane, Ana Sayfa, Yönetim, Çıkış.
-- Tüm sayfalar Bootstrap responsive yerleşim ile mobil uyumludur.
+Windows (PowerShell):
 
-## Kütüphane (VI Component Tester)
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python run.py create-admin --username admin --password sifreniz
+python run.py
+```
 
-- Sayfa: /library
-- Kayıtlı test verileri listelenir.
-- Yeni test oluşturma:
-	- Test ismi girilir.
-	- Test için açıklama girilebilir.
-	- Elektronik kart fotoğrafı yüklenir.
-	- Fotoğraf üzerinde zoom kullanılabilir.
-	- Tıklanan noktalara görünür + işareti konur ve koordinatlar kaydedilir.
-	- Nokta isimleri varsayılan olarak TP1, TP2 ... şeklinde gelir ve değiştirilebilir.
-	- Her test point için ayrı test point görseli yüklenir.
-	- image_process.py modülü ile test point görselinden otomatik olarak v, f, r, tol ve grafik verisi çıkarılır.
-	- Çıkarılan grafik verisi gerektiğinde yine image_process.py modülü ile görsele dönüştürülür.
+## Temel Kullanim Akisi
 
-## Veritabanı Tabloları (Kütüphane)
+1. Tarayicida /login sayfasina gidin ve giris yapin.
+2. Ust bardan Kütüphane sayfasini acin.
+3. Yeni test eklemek icin:
+	- Test ismi girin.
+	- Kart fotografi secin.
+	- Kart uzerine cift tiklayarak marker ekleyin.
+	- Marker adini/aciklamasini duzenleyin.
+	- Her nokta icin TP gorseli yukleyin (OCR verisi otomatik cikartilir).
+	- Kaydet butonuna basin.
+4. Mevcut test guncellemek icin:
+	- Kayitli testi listeden secin.
+	- Gerekli alanlari duzenleyin.
+	- Kart fotografini degistirmek istemiyorsaniz tekrar secmek zorunda degilsiniz.
+	- Yeni eklenen noktalarda TP gorseli zorunludur.
+	- Kaydet butonuna basin.
 
-- tests: test adı, açıklama ve kart fotoğrafı (BLOB) bilgisi.
-- testpoints: test nokta adı, açıklama, koordinatlar ve ölçüm alanları (v, f, r, tol, grafik).
+## Yetki ve Sayfa Eristimi
 
-## Kullanıcı Yönetimi
+- /library: sadece admin
+- /setup: sadece admin
+- /: giris yapmis kullanicilar
+- /login: herkese acik
 
-- Admin girişi ile setup sayfasında yeni kullanıcı ekleme/silme işlemleri yapılabilir.
-- Tüm kullanıcılar kendi şifresini değiştirebilir.
-- Admin kullanıcı, hedef kullanıcı adını girerek diğer kullanıcıların şifresini de değiştirebilir.
+Ust bar butonlari:
 
-## Loglama
+- VI Library logosu ana sayfaya goturur
+- Kütüphane
+- Yonetim
+- Cikis
 
-- İşlem logları SQLite içindeki audit_logs tablosuna kaydedilir.
-- Login, logout, kullanıcı ekleme/silme, şifre değiştirme ve ana işlem tetikleme olayları loglanır.
-- Setup sayfasında admin tarafında log listesi görüntülenebilir.
+## Login ve Cikis
 
-## API Uçları
+- Login sayfasi: /login
+- Oturum yoksa / istegi otomatik olarak /login sayfasina yonlendirilir
+- Cikis: /logout
+
+## Veritabani Ozeti
+
+- tests: test adi, aciklama, kart fotografi (BLOB), olusturan kullanici
+- testpoints: nokta adi, aciklama, koordinat, olcum alanlari (v, f, r, tol, grafik)
+- users: kullanici ve rol bilgileri
+- audit_logs: islem loglari
+
+## API Uclari
+
+Kullanici/Yonetim:
 
 - GET /users (admin)
 - POST /users (admin)
 - DELETE /users/{username} (admin)
 - POST /users/{username}/password (kendi hesabi veya admin)
 - GET /logs?limit=100 (admin)
+
+Kutuphane:
+
 - GET /api/library/tests
 - GET /api/library/tests/{test_id}
+- POST /api/library/tests (yeni test)
+- PUT /api/library/tests/{test_id} (test guncelleme)
+- POST /api/library/tests/{test_id} (guncelleme fallback)
 - POST /api/library/process-testpoint-image
 - POST /api/library/testpoints/{testpoint_id}/grafik-gorsel
-- POST /api/library/tests (multipart form-data)
+
+## Sistem Acilisinda Otomatik Baslatma
+
+Bu bolumde uygulamanin Linux ve Windows ortamlarda bilgisayar acilisinda otomatik baslamasi icin gerekli ayarlar yer alir.
+
+### Linux (systemd)
+
+1. Servis dosyasi olusturun:
+
+```bash
+sudo nano /etc/systemd/system/vilib.service
+```
+
+2. Icerige asagidakini yazin (yol ve kullanici adini kendi ortaminiza gore duzenleyin):
+
+```ini
+[Unit]
+Description=VI Library FastAPI Service
+After=network.target
+
+[Service]
+Type=simple
+User=ubntlnx
+WorkingDirectory=/home/ubntlnx/MyWorks/Codes/Django/vilibprj/vilib
+Environment="TESSERACT_CMD=/usr/bin/tesseract"
+ExecStart=/home/ubntlnx/MyWorks/Codes/Django/vilibprj/vilib/.venv/bin/python run.py --host 0.0.0.0 --port 8086
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+3. Servisi etkinlestirin ve baslatin:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable vilib.service
+sudo systemctl start vilib.service
+```
+
+4. Durum kontrolu:
+
+```bash
+sudo systemctl status vilib.service
+journalctl -u vilib.service -f
+```
+
+### Windows (Task Scheduler)
+
+1. Gorev Zamanlayici acin (`taskschd.msc`).
+2. `Create Task` secin.
+3. `General` sekmesi:
+	- Name: `VI Library`
+	- `Run whether user is logged on or not`
+	- `Run with highest privileges`
+4. `Triggers` sekmesi:
+	- `New` -> `At startup`
+5. `Actions` sekmesi:
+	- `New` -> `Start a program`
+	- Program/script:
+
+```text
+C:\path\to\project\.venv\Scripts\python.exe
+```
+
+	- Add arguments:
+
+```text
+run.py --host 0.0.0.0 --port 8086
+```
+
+	- Start in:
+
+```text
+C:\path\to\project
+```
+
+6. `Conditions` sekmesinde gerekirse `Start the task only if the computer is on AC power` secenegini kaldirin.
+7. Gorevi kaydedin.
+
+PowerShell ile ayni gorevi komutla olusturmak isterseniz:
+
+```powershell
+$python = "C:\path\to\project\.venv\Scripts\python.exe"
+$workdir = "C:\path\to\project"
+$action = New-ScheduledTaskAction -Execute $python -Argument "run.py --host 0.0.0.0 --port 8086" -WorkingDirectory $workdir
+$trigger = New-ScheduledTaskTrigger -AtStartup
+Register-ScheduledTask -TaskName "VI Library" -Action $action -Trigger $trigger -Description "VI Library FastAPI autostart"
+```
+
+Windows ortami icin Tesseract yolunu kalici tanimlamak isterseniz (yonetici PowerShell):
+
+```powershell
+[Environment]::SetEnvironmentVariable("TESSERACT_CMD", "C:\Program Files\Tesseract-OCR\tesseract.exe", "Machine")
+```
+
+## Sorun Giderme
+
+- OCR sonucunda veri cikmiyorsa Tesseract kurulumunu kontrol edin.
+- Guncelleme isteginde 405 hatasi alirsaniz uygulamayi yeniden baslatin.
+- Yeni bir test kaydinda kart fotografi zorunludur.

@@ -12,6 +12,12 @@
       border-radius: 0.5rem;
       background: #fff;
       max-height: 60vh;
+      cursor: grab;
+    }
+
+    .image-stage.panning {
+      cursor: grabbing;
+      user-select: none;
     }
 
     .zoom-target {
@@ -46,7 +52,7 @@
       line-height: 1;
       border-radius: 999px;
       border: 1px solid #111;
-      background: rgba(255, 255, 0, 0.95);
+      background: rgba(255, 255, 0, 0.10);
       box-shadow: 0 0 0 1px #fff, 0 0 6px rgba(0, 0, 0, 0.35);
       pointer-events: auto;
       cursor: help;
@@ -63,6 +69,19 @@
       border: 1px solid #dee2e6;
       object-fit: cover;
       background: #f8f9fa;
+    }
+
+    .marker-hint {
+      position: fixed;
+      z-index: 1080;
+      background: rgba(33, 37, 41, 0.92);
+      color: #fff;
+      font-size: 0.78rem;
+      padding: 0.2rem 0.45rem;
+      border-radius: 0.35rem;
+      pointer-events: none;
+      display: none;
+      white-space: nowrap;
     }
   </style>
 </head>
@@ -84,6 +103,7 @@
   </nav>
 
   <main class="container-fluid px-3 px-md-4 px-xl-5 py-4">
+    <div id="markerHint" class="marker-hint"></div>
     <div class="row justify-content-center mb-3">
       <div class="col-12 col-xxl-11">
         <div class="card shadow-sm border-0">
@@ -91,9 +111,16 @@
             <div class="row g-2 align-items-end">
               <div class="col-12 col-md-8 col-lg-9">
                 <label class="form-label" for="testsDropdown">Kayıtlı Testler</label>
-                <select id="testsDropdown" class="form-select">
-                  <option value="">Test seçin...</option>
-                </select>
+                <input type="hidden" id="testsDropdown" value="">
+                <div class="dropdown w-100">
+                  <button id="testsDropdownToggle" class="btn btn-outline-secondary dropdown-toggle w-100 text-start" type="button" aria-expanded="false">
+                    Test seçin...
+                  </button>
+                  <div id="testsDropdownMenu" class="dropdown-menu p-2 w-100">
+                    <input id="testsDropdownSearch" class="form-control form-control-sm mb-2" type="text" placeholder="Dropdown içinde ara...">
+                    <div id="testsDropdownList" class="list-group list-group-flush" style="max-height: 220px; overflow: auto;"></div>
+                  </div>
+                </div>
               </div>
               <div class="col-12 col-md-4 col-lg-3 d-grid">
                 <button class="btn btn-outline-dark" onclick="loadTests()">Listeyi Yenile</button>
@@ -109,7 +136,7 @@
       <div class="col-12 col-xxl-11">
         <div class="card shadow-sm border-0 mb-4">
           <div class="card-body p-3 p-md-4">
-            <h2 class="h5 mb-3">Yeni Test Verisi</h2>
+            <h2 class="h5 mb-3" id="formHeading">Yeni Test Verisi</h2>
             <div class="row g-2 mb-3">
               <div class="col-12 col-md-6">
                 <label class="form-label" for="testName">Test İsmi</label>
@@ -166,7 +193,10 @@
               </table>
             </div>
             <div id="saveMessage" class="small mb-2"></div>
-            <button class="btn btn-success" onclick="saveTest()">Test Kütüphanesine Kaydet</button>
+            <div class="d-flex gap-2 flex-wrap">
+              <button class="btn btn-success" onclick="saveTest()">Kaydet</button>
+              <button class="btn btn-outline-secondary" onclick="resetForm()">Yeni Test</button>
+            </div>
           </div>
         </div>
       </div>
@@ -175,20 +205,58 @@
 
   <script>
     const testsDropdown = document.getElementById('testsDropdown');
+    const testsDropdownToggle = document.getElementById('testsDropdownToggle');
+    const testsDropdownMenu = document.getElementById('testsDropdownMenu');
+    const testsDropdownSearch = document.getElementById('testsDropdownSearch');
+    const testsDropdownList = document.getElementById('testsDropdownList');
     const testsMessage = document.getElementById('testsMessage');
     const saveMessage = document.getElementById('saveMessage');
     const testNameInput = document.getElementById('testName');
     const testDescriptionInput = document.getElementById('testDescription');
     const boardImageInput = document.getElementById('boardImageInput');
     const boardImage = document.getElementById('boardImage');
+    const imageStage = document.getElementById('imageStage');
     const markerLayer = document.getElementById('markerLayer');
     const pointsTableBody = document.getElementById('pointsTableBody');
     const zoomRange = document.getElementById('zoomRange');
     const zoomTarget = document.getElementById('zoomTarget');
     const zoomValue = document.getElementById('zoomValue');
     const imageHint = document.getElementById('imageHint');
+    const markerHint = document.getElementById('markerHint');
 
     let points = [];
+    let allTests = [];
+    let currentTestId = null;
+    const formHeading = document.getElementById('formHeading');
+    let isPanning = false;
+    let panStartX = 0;
+    let panStartY = 0;
+    let panScrollLeft = 0;
+    let panScrollTop = 0;
+
+    function closeTestsDropdown() {
+      testsDropdownMenu.classList.remove('show');
+      testsDropdownToggle.setAttribute('aria-expanded', 'false');
+    }
+
+    function openTestsDropdown() {
+      testsDropdownMenu.classList.add('show');
+      testsDropdownToggle.setAttribute('aria-expanded', 'true');
+      testsDropdownSearch.focus();
+    }
+
+    function resetForm() {
+      currentTestId = null;
+      testNameInput.value = '';
+      testDescriptionInput.value = '';
+      boardImageInput.value = '';
+      boardImage.src = '';
+      zoomTarget.style.display = 'none';
+      imageHint.classList.remove('d-none');
+      clearPoints();
+      setMessage(saveMessage, '');
+      formHeading.textContent = 'Yeni Test Verisi';
+    }
 
     function setMessage(el, text, ok = false) {
       el.textContent = text;
@@ -203,14 +271,27 @@
 
     function renderMarkers() {
       markerLayer.innerHTML = '';
-      points.forEach((point) => {
+      points.forEach((point, index) => {
         const mark = document.createElement('span');
         mark.className = 'marker';
         mark.style.left = `${point.x}%`;
         mark.style.top = `${point.y}%`;
         mark.textContent = '+';
+        mark.dataset.index = String(index);
         mark.title = point.name || 'Test noktası';
         mark.setAttribute('aria-label', point.name || 'Test noktası');
+        mark.addEventListener('click', (event) => {
+          event.stopPropagation();
+          const pointIndex = Number.parseInt(event.currentTarget.dataset.index, 10);
+          const selected = points[pointIndex];
+          if (!selected) {
+            return;
+          }
+          markerHint.textContent = selected.name || `TP${pointIndex + 1}`;
+          markerHint.style.left = `${event.clientX + 12}px`;
+          markerHint.style.top = `${event.clientY + 12}px`;
+          markerHint.style.display = 'block';
+        });
         markerLayer.appendChild(mark);
       });
     }
@@ -275,6 +356,10 @@
       renderTable();
     }
 
+    function hideMarkerHint() {
+      markerHint.style.display = 'none';
+    }
+
     boardImageInput.addEventListener('change', (event) => {
       const file = event.target.files[0];
       if (!file) {
@@ -287,7 +372,49 @@
       clearPoints();
     });
 
-    markerLayer.addEventListener('click', addPointFromClick);
+    markerLayer.addEventListener('dblclick', addPointFromClick);
+    markerLayer.addEventListener('click', hideMarkerHint);
+    document.addEventListener('click', hideMarkerHint);
+
+    imageStage.addEventListener('mousedown', (event) => {
+      if (event.button !== 0) {
+        return;
+      }
+      if (event.target.closest('.marker')) {
+        return;
+      }
+
+      isPanning = true;
+      imageStage.classList.add('panning');
+      panStartX = event.clientX;
+      panStartY = event.clientY;
+      panScrollLeft = imageStage.scrollLeft;
+      panScrollTop = imageStage.scrollTop;
+      event.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (event) => {
+      if (!isPanning) {
+        return;
+      }
+
+      const dx = event.clientX - panStartX;
+      const dy = event.clientY - panStartY;
+      imageStage.scrollLeft = panScrollLeft - dx;
+      imageStage.scrollTop = panScrollTop - dy;
+    });
+
+    const stopPanning = () => {
+      if (!isPanning) {
+        return;
+      }
+      isPanning = false;
+      imageStage.classList.remove('panning');
+    };
+
+    window.addEventListener('mouseup', stopPanning);
+    imageStage.addEventListener('mouseleave', stopPanning);
+
     zoomRange.addEventListener('input', applyZoom);
     applyZoom();
 
@@ -364,7 +491,9 @@
     });
 
     async function loadTests() {
-      testsDropdown.innerHTML = '<option value="">Test seçin...</option>';
+      testsDropdown.value = '';
+      testsDropdownToggle.textContent = 'Test seçin...';
+      testsDropdownSearch.value = '';
       const response = await fetch('/api/library/tests');
       if (!response.ok) {
         setMessage(testsMessage, 'Test listesi alınamadı.');
@@ -372,21 +501,60 @@
       }
 
       const data = await response.json();
+      allTests = data.tests || [];
       setMessage(testsMessage, `${data.tests.length} test kaydı bulundu.`, true);
 
-      data.tests.forEach((test) => {
-        const option = document.createElement('option');
-        option.value = String(test.id);
-        option.textContent = `${test.name} (${test.point_count} TP)`;
-        testsDropdown.appendChild(option);
+      renderTestsDropdownList(allTests);
+    }
+
+    function renderTestsDropdownList(testList) {
+      testsDropdownList.innerHTML = '';
+      if (!testList.length) {
+        testsDropdownList.innerHTML = '<div class="small text-muted px-2 py-1">Sonuç bulunamadı</div>';
+        return;
+      }
+
+      testList.forEach((test) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'list-group-item list-group-item-action';
+        button.textContent = `${test.name} (${test.point_count} TP)`;
+        button.dataset.id = String(test.id);
+        button.addEventListener('click', () => {
+          testsDropdown.value = String(test.id);
+          testsDropdownToggle.textContent = `${test.name} (${test.point_count} TP)`;
+          loadTestDetail(test.id);
+          closeTestsDropdown();
+        });
+        testsDropdownList.appendChild(button);
       });
     }
 
-    testsDropdown.addEventListener('change', (event) => {
-      const id = Number.parseInt(event.target.value, 10);
-      if (!Number.isNaN(id)) {
-        loadTestDetail(id);
+    testsDropdownSearch.addEventListener('input', () => {
+      const arama = testsDropdownSearch.value.trim().toLowerCase();
+      if (!arama) {
+        renderTestsDropdownList(allTests);
+        return;
       }
+      const filtreli = allTests.filter((test) => String(test.name || '').toLowerCase().includes(arama));
+      renderTestsDropdownList(filtreli);
+    });
+
+    testsDropdownToggle.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (testsDropdownMenu.classList.contains('show')) {
+        closeTestsDropdown();
+      } else {
+        openTestsDropdown();
+      }
+    });
+
+    testsDropdownMenu.addEventListener('click', (event) => {
+      event.stopPropagation();
+    });
+
+    document.addEventListener('click', () => {
+      closeTestsDropdown();
     });
 
     async function loadTestDetail(testId) {
@@ -402,7 +570,10 @@
       boardImage.src = data.test.image_path;
       zoomTarget.style.display = 'inline-block';
       imageHint.classList.add('d-none');
+      currentTestId = data.test.id;
+      formHeading.textContent = `Düzenleniyor: ${data.test.name}`;
       points = data.points.map((point, index) => ({
+        id: point.id,
         name: point.name || `TP${index + 1}`,
         description: point.description || '',
         x: Number.parseFloat(point.x),
@@ -431,7 +602,7 @@
         setMessage(saveMessage, 'Test ismi zorunlu.');
         return;
       }
-      if (!imageFile) {
+      if (!currentTestId && !imageFile) {
         setMessage(saveMessage, 'Yeni kayıt için kart fotoğrafı seçilmesi zorunlu.');
         return;
       }
@@ -440,13 +611,15 @@
         return;
       }
 
-      const eksikGorsel = points.find((point) => !point.imageFile);
+      // Güncelleme: sadece yeni eklenen noktalar (id'si yok) için görsel zorunlu
+      const eksikGorsel = points.find((point) => !point.imageFile && !point.id);
       if (eksikGorsel) {
         setMessage(saveMessage, `${eksikGorsel.name} için test point görseli yüklenmeli.`);
         return;
       }
 
       const payloadPoints = points.map((point, index) => ({
+        ...(point.id ? { id: point.id } : {}),
         name: (point.name || `TP${index + 1}`).trim() || `TP${index + 1}`,
         description: (point.description || '').trim(),
         x: Number(point.x.toFixed(4)),
@@ -456,16 +629,18 @@
       const formData = new FormData();
       formData.append('test_name', testName);
       formData.append('test_description', testDescription);
-      formData.append('image', imageFile);
+      if (imageFile) { formData.append('image', imageFile); }
       formData.append('points_json', JSON.stringify(payloadPoints));
       points.forEach((point, index) => {
-        formData.append(`point_image_${index + 1}`, point.imageFile);
+        if (point.imageFile) { formData.append(`point_image_${index + 1}`, point.imageFile); }
       });
 
-      const response = await fetch('/api/library/tests', {
-        method: 'POST',
-        body: formData
-      });
+      const url = currentTestId ? `/api/library/tests/${currentTestId}` : '/api/library/tests';
+      const method = currentTestId ? 'PUT' : 'POST';
+      let response = await fetch(url, { method, body: formData });
+      if (currentTestId && method === 'PUT' && response.status === 405) {
+        response = await fetch(url, { method: 'POST', body: formData });
+      }
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -473,10 +648,15 @@
         return;
       }
 
-      boardImageInput.value = '';
-      testDescriptionInput.value = '';
-      clearPoints();
-      setMessage(saveMessage, 'Test kaydı oluşturuldu.', true);
+      if (currentTestId) {
+        setMessage(saveMessage, 'Test güncellendi.', true);
+        await loadTestDetail(currentTestId);
+      } else {
+        boardImageInput.value = '';
+        testDescriptionInput.value = '';
+        clearPoints();
+        setMessage(saveMessage, 'Test kaydı oluşturuldu.', true);
+      }
       await loadTests();
     }
 

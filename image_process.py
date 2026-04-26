@@ -1,9 +1,37 @@
 import re
 import base64
+import os
+import shutil
 
 import cv2
 import numpy as np
 import pytesseract
+
+
+def _tesseract_yolunu_ayarla():
+    """Tesseract komutunu platformdan bagimsiz sekilde belirler."""
+    env_cmd = os.getenv("TESSERACT_CMD", "").strip()
+    if env_cmd:
+        pytesseract.pytesseract.tesseract_cmd = env_cmd
+        return
+
+    bulunan = shutil.which("tesseract")
+    if bulunan:
+        pytesseract.pytesseract.tesseract_cmd = bulunan
+        return
+
+    if os.name == "nt":
+        olasi_yollar = [
+            r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+            r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+        ]
+        for yol in olasi_yollar:
+            if os.path.exists(yol):
+                pytesseract.pytesseract.tesseract_cmd = yol
+                return
+
+
+_tesseract_yolunu_ayarla()
 
 
 def _roi_hazirla(roi, olcek=5, enterpolasyon=cv2.INTER_CUBIC):

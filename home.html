@@ -116,9 +116,16 @@
             <div class="row g-2 align-items-end">
               <div class="col-12 col-lg-5">
                 <label class="form-label" for="testsDropdown">Kayıtlı Testler</label>
-                <select id="testsDropdown" class="form-select">
-                  <option value="">Test seçin...</option>
-                </select>
+                <input type="hidden" id="testsDropdown" value="">
+                <div class="dropdown w-100">
+                  <button id="testsDropdownToggle" class="btn btn-outline-secondary dropdown-toggle w-100 text-start" type="button" aria-expanded="false">
+                    Test seçin...
+                  </button>
+                  <div id="testsDropdownMenu" class="dropdown-menu p-2 w-100">
+                    <input id="testsDropdownSearch" class="form-control form-control-sm mb-2" type="text" placeholder="Dropdown içinde ara...">
+                    <div id="testsDropdownList" class="list-group list-group-flush" style="max-height: 220px; overflow: auto;"></div>
+                  </div>
+                </div>
               </div>
               <div class="col-12 col-lg-5">
                 <label class="form-label" for="pointsDropdown">Test Noktası</label>
@@ -188,6 +195,10 @@
 
   <script>
     const testsDropdown = document.getElementById('testsDropdown');
+    const testsDropdownToggle = document.getElementById('testsDropdownToggle');
+    const testsDropdownMenu = document.getElementById('testsDropdownMenu');
+    const testsDropdownSearch = document.getElementById('testsDropdownSearch');
+    const testsDropdownList = document.getElementById('testsDropdownList');
     const pointsDropdown = document.getElementById('pointsDropdown');
     const testsMessage = document.getElementById('testsMessage');
     const detailMessage = document.getElementById('detailMessage');
@@ -212,6 +223,7 @@
     const graphHint = document.getElementById('graphHint');
 
     let points = [];
+    let allTests = [];
     let activePointIndex = -1;
 
     let isPanning = false;
@@ -219,6 +231,17 @@
     let panStartY = 0;
     let panScrollLeft = 0;
     let panScrollTop = 0;
+
+    function closeTestsDropdown() {
+      testsDropdownMenu.classList.remove('show');
+      testsDropdownToggle.setAttribute('aria-expanded', 'false');
+    }
+
+    function openTestsDropdown() {
+      testsDropdownMenu.classList.add('show');
+      testsDropdownToggle.setAttribute('aria-expanded', 'true');
+      testsDropdownSearch.focus();
+    }
 
     function setMessage(el, text, ok = false) {
       el.textContent = text;
@@ -316,7 +339,9 @@
     }
 
     async function loadTests() {
-      testsDropdown.innerHTML = '<option value="">Test seçin...</option>';
+      testsDropdown.value = '';
+      testsDropdownToggle.textContent = 'Test seçin...';
+      testsDropdownSearch.value = '';
       pointsDropdown.innerHTML = '<option value="">Nokta seçin...</option>';
       clearPointDetail();
 
@@ -327,13 +352,32 @@
       }
 
       const data = await response.json();
+      allTests = data.tests || [];
       setMessage(testsMessage, `${data.tests.length} test kaydı bulundu.`, true);
 
-      data.tests.forEach((test) => {
-        const option = document.createElement('option');
-        option.value = String(test.id);
-        option.textContent = `${test.name} (${test.point_count} TP)`;
-        testsDropdown.appendChild(option);
+      renderTestsDropdownList(allTests);
+    }
+
+    function renderTestsDropdownList(testList) {
+      testsDropdownList.innerHTML = '';
+      if (!testList.length) {
+        testsDropdownList.innerHTML = '<div class="small text-muted px-2 py-1">Sonuç bulunamadı</div>';
+        return;
+      }
+
+      testList.forEach((test) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'list-group-item list-group-item-action';
+        button.textContent = `${test.name} (${test.point_count} TP)`;
+        button.dataset.id = String(test.id);
+        button.addEventListener('click', () => {
+          testsDropdown.value = String(test.id);
+          testsDropdownToggle.textContent = `${test.name} (${test.point_count} TP)`;
+          loadTestDetail(test.id);
+          closeTestsDropdown();
+        });
+        testsDropdownList.appendChild(button);
       });
     }
 
@@ -371,12 +415,14 @@
       setMessage(detailMessage, `Test yüklendi: ${data.test.name}. Noktayı listeden veya markerdan seçin.`, true);
     }
 
-    testsDropdown.addEventListener('change', (event) => {
-      const id = Number.parseInt(event.target.value, 10);
-      if (Number.isNaN(id)) {
+    testsDropdownSearch.addEventListener('input', () => {
+      const arama = testsDropdownSearch.value.trim().toLowerCase();
+      if (!arama) {
+        renderTestsDropdownList(allTests);
         return;
       }
-      loadTestDetail(id);
+      const filtreli = allTests.filter((test) => String(test.name || '').toLowerCase().includes(arama));
+      renderTestsDropdownList(filtreli);
     });
 
     pointsDropdown.addEventListener('change', (event) => {
@@ -387,6 +433,23 @@
         return;
       }
       showPointDetail(pointIndex);
+    });
+
+    testsDropdownToggle.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (testsDropdownMenu.classList.contains('show')) {
+        closeTestsDropdown();
+      } else {
+        openTestsDropdown();
+      }
+    });
+
+    testsDropdownMenu.addEventListener('click', (event) => {
+      event.stopPropagation();
+    });
+
+    document.addEventListener('click', () => {
+      closeTestsDropdown();
     });
 
     imageStage.addEventListener('mousedown', (event) => {
