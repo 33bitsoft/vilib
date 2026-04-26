@@ -107,6 +107,7 @@ def _init_db() -> None:
                 grafik TEXT,
                 description TEXT,
                 sort_order INTEGER NOT NULL DEFAULT 0,
+                is_gnd INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY(test_id) REFERENCES tests(id) ON DELETE CASCADE
             )
             """
@@ -119,6 +120,7 @@ def _init_db() -> None:
         _kolon_ekle(connection, "testpoints", "tol", "TEXT")
         _kolon_ekle(connection, "testpoints", "grafik", "TEXT")
         _kolon_ekle(connection, "testpoints", "description", "TEXT")
+        _kolon_ekle(connection, "testpoints", "is_gnd", "INTEGER NOT NULL DEFAULT 0")
         _migrate_library_schema(connection)
 
 
@@ -558,7 +560,8 @@ def get_library_test(test_id: int, request: Request):
                 tp.f,
                 tp.r,
                 tp.tol,
-                tp.grafik
+                tp.grafik,
+                tp.is_gnd
             FROM testpoints tp
             WHERE tp.test_id = ?
             ORDER BY tp.sort_order ASC, tp.id ASC
@@ -578,6 +581,7 @@ def get_library_test(test_id: int, request: Request):
             "x": row["x"],
             "y": row["y"],
             "description": row["description"] or "",
+            "is_gnd": bool(row["is_gnd"]),
             "measurement": {
                 "v": row["v"] or "",
                 "f": row["f"] or "",
@@ -699,26 +703,30 @@ async def create_library_test(request: Request):
         )
         test_id = cursor.lastrowid
 
-        for index, point in enumerate(parsed_points, start=1):
-            point_name = str(point.get("name") or f"TP{index}")
+        for index, point in enumerate(parsed_points):
+            point_num = index + 1
+            point_name = str(point.get("name") or f"TP{point_num}")
             x = float(point.get("x", 0))
             y = float(point.get("y", 0))
             point_description = str(point.get("description") or "")
+            is_gnd = 1 if point.get("is_gnd", False) else 0
 
-            point_image_field = _form_dosyasi_al(form, f"point_image_{index}")
-            point_image_bytes = await point_image_field.read()
-            if not point_image_bytes:
-                raise HTTPException(status_code=400, detail=f"TP{index} görseli okunamadı")
+            point_image = form.get(f"point_image_{index}")
+            point_image_bytes = b""
+            if isinstance(point_image, (UploadFile, StarletteUploadFile)) and getattr(point_image, "filename", ""):
+                point_image_bytes = await point_image.read()
 
-            try:
-                extracted = testpoint_gorselini_isle(gorsel_bytes=point_image_bytes)
-            except Exception as exc:
-                raise HTTPException(status_code=400, detail=f"TP{index} işleme hatası: {exc}") from exc
+            extracted = {"v": "", "f": "", "r": "", "tol": "", "grafik": ""}
+            if point_image_bytes:
+                try:
+                    extracted = testpoint_gorselini_isle(gorsel_bytes=point_image_bytes)
+                except Exception as exc:
+                    raise HTTPException(status_code=400, detail=f"TP{point_num} işleme hatası: {exc}") from exc
 
             connection.execute(
                 """
-                INSERT INTO testpoints (test_id, name, x, y, v, f, r, tol, grafik, description, sort_order)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO testpoints (test_id, name, x, y, v, f, r, tol, grafik, description, sort_order, is_gnd)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     test_id,
@@ -731,7 +739,8 @@ async def create_library_test(request: Request):
                     str(extracted.get("tol", "")),
                     str(extracted.get("grafik", "")),
                     point_description,
-                    index,
+                    point_num,
+                    is_gnd,
                 ),
             )
 
@@ -802,12 +811,14 @@ async def update_library_test(test_id: int, request: Request):
 
         submitted_ids = set()
 
-        for index, point in enumerate(parsed_points, start=1):
+        for index, point in enumerate(parsed_points):
+            point_num = index + 1
             point_id = point.get("id")
-            point_name = str(point.get("name") or f"TP{index}")
+            point_name = str(point.get("name") or f"TP{point_num}")
             x = float(point.get("x", 0))
             y = float(point.get("y", 0))
             point_description = str(point.get("description") or "")
+            is_gnd = 1 if point.get("is_gnd", False) else 0
 
             point_image = form.get(f"point_image_{index}")
             has_point_image = isinstance(point_image, (UploadFile, StarletteUploadFile)) and getattr(point_image, "filename", "")
@@ -820,50 +831,49 @@ async def update_library_test(test_id: int, request: Request):
                         try:
                             extracted = testpoint_gorselini_isle(gorsel_bytes=point_image_bytes)
                         except Exception as exc:
-                            raise HTTPException(status_code=400, detail=f"TP{index} işleme hatası: {exc}") from exc
+                            raise HTTPException(status_code=400, detail=f"TP{point_num} işleme hatası: {exc}") from exc
                         connection.execute(
                             """
                             UPDATE testpoints
-                            SET name=?, x=?, y=?, description=?, v=?, f=?, r=?, tol=?, grafik=?, sort_order=?
+                            SET name=?, x=?, y=?, description=?, v=?, f=?, r=?, tol=?, grafik=?, sort_order=?, is_gnd=?
                             WHERE id=?
                             """,
                             (
                                 point_name, x, y, point_description,
                                 str(extracted.get("v", "")), str(extracted.get("f", "")),
                                 str(extracted.get("r", "")), str(extracted.get("tol", "")),
-                                str(extracted.get("grafik", "")), index, int(point_id),
+                                str(extracted.get("grafik", "")), point_num, is_gnd, int(point_id),
                             ),
                         )
                     else:
                         connection.execute(
-                            "UPDATE testpoints SET name=?, x=?, y=?, description=?, sort_order=? WHERE id=?",
-                            (point_name, x, y, point_description, index, int(point_id)),
+                            "UPDATE testpoints SET name=?, x=?, y=?, description=?, sort_order=?, is_gnd=? WHERE id=?",
+                            (point_name, x, y, point_description, point_num, is_gnd, int(point_id)),
                         )
                 else:
                     connection.execute(
-                        "UPDATE testpoints SET name=?, x=?, y=?, description=?, sort_order=? WHERE id=?",
-                        (point_name, x, y, point_description, index, int(point_id)),
+                        "UPDATE testpoints SET name=?, x=?, y=?, description=?, sort_order=?, is_gnd=? WHERE id=?",
+                        (point_name, x, y, point_description, point_num, is_gnd, int(point_id)),
                     )
             else:
-                if not has_point_image:
-                    raise HTTPException(status_code=400, detail=f"Yeni nokta '{point_name}' için görsel zorunlu")
-                point_image_bytes = await point_image.read()
-                if not point_image_bytes:
-                    raise HTTPException(status_code=400, detail=f"'{point_name}' görseli okunamadı")
-                try:
-                    extracted = testpoint_gorselini_isle(gorsel_bytes=point_image_bytes)
-                except Exception as exc:
-                    raise HTTPException(status_code=400, detail=f"TP{index} işleme hatası: {exc}") from exc
+                extracted = {"v": "", "f": "", "r": "", "tol": "", "grafik": ""}
+                if has_point_image:
+                    point_image_bytes = await point_image.read()
+                    if point_image_bytes:
+                        try:
+                            extracted = testpoint_gorselini_isle(gorsel_bytes=point_image_bytes)
+                        except Exception as exc:
+                            raise HTTPException(status_code=400, detail=f"TP{point_num} işleme hatası: {exc}") from exc
                 connection.execute(
                     """
-                    INSERT INTO testpoints (test_id, name, x, y, v, f, r, tol, grafik, description, sort_order)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO testpoints (test_id, name, x, y, v, f, r, tol, grafik, description, sort_order, is_gnd)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         test_id, point_name, x, y,
                         str(extracted.get("v", "")), str(extracted.get("f", "")),
                         str(extracted.get("r", "")), str(extracted.get("tol", "")),
-                        str(extracted.get("grafik", "")), point_description, index,
+                        str(extracted.get("grafik", "")), point_description, point_num, is_gnd,
                     ),
                 )
 

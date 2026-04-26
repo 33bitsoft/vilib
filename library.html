@@ -180,6 +180,7 @@
                     <th>Açıklama</th>
                     <th>X</th>
                     <th>Y</th>
+                    <th>GND</th>
                     <th>TP Görseli</th>
                     <th>V</th>
                     <th>F</th>
@@ -306,12 +307,15 @@
           : '<span class="text-muted small">-</span>';
 
         const dosyaAdi = point.imageName || 'Dosya seçilmedi';
+        const gndButtonClass = point.is_gnd ? 'btn-success' : 'btn-outline-secondary';
+        const gndButtonText = point.is_gnd ? 'GND ✓' : 'Ayarla';
 
         row.innerHTML = `
           <td><input class="form-control form-control-sm" value="${point.name}" data-field="name" data-index="${index}"></td>
           <td><input class="form-control form-control-sm" value="${point.description || ''}" data-field="description" data-index="${index}"></td>
           <td>${point.x.toFixed(2)}</td>
           <td>${point.y.toFixed(2)}</td>
+          <td><button class="btn btn-sm ${gndButtonClass}" data-action="toggle-gnd" data-index="${index}">${gndButtonText}</button></td>
           <td>
             <input class="form-control form-control-sm kucuk-dosya" type="file" accept="image/*" data-action="point-image" data-index="${index}">
             <div class="small text-muted mt-1">${dosyaAdi}</div>
@@ -348,6 +352,7 @@
         description: '',
         x,
         y,
+        is_gnd: false,
         imageFile: null,
         imageName: '',
         measurement: { v: '', f: '', r: '', tol: '', grafik: '', grafik_gorsel_path: '' }
@@ -435,17 +440,29 @@
 
     pointsTableBody.addEventListener('click', (event) => {
       const index = Number.parseInt(event.target.dataset.index, 10);
-      if (event.target.dataset.action !== 'delete' || Number.isNaN(index)) {
+      if (Number.isNaN(index)) {
         return;
       }
-      points.splice(index, 1);
-      points.forEach((point, idx) => {
-        if (!point.name || point.name.startsWith('TP')) {
-          point.name = `TP${idx + 1}`;
-        }
-      });
-      renderMarkers();
-      renderTable();
+
+      if (event.target.dataset.action === 'delete') {
+        points.splice(index, 1);
+        points.forEach((point, idx) => {
+          if (!point.name || point.name.startsWith('TP')) {
+            point.name = `TP${idx + 1}`;
+          }
+        });
+        renderMarkers();
+        renderTable();
+      } else if (event.target.dataset.action === 'toggle-gnd') {
+        event.preventDefault();
+        event.stopPropagation();
+        // Ensure only one point is GND
+        points.forEach((point) => {
+          point.is_gnd = false;
+        });
+        points[index].is_gnd = true;
+        renderTable();
+      }
     });
 
     pointsTableBody.addEventListener('change', async (event) => {
@@ -578,6 +595,7 @@
         description: point.description || '',
         x: Number.parseFloat(point.x),
         y: Number.parseFloat(point.y),
+        is_gnd: point.is_gnd || false,
         imageFile: null,
         imageName: '',
         measurement: {
@@ -611,19 +629,13 @@
         return;
       }
 
-      // Güncelleme: sadece yeni eklenen noktalar (id'si yok) için görsel zorunlu
-      const eksikGorsel = points.find((point) => !point.imageFile && !point.id);
-      if (eksikGorsel) {
-        setMessage(saveMessage, `${eksikGorsel.name} için test point görseli yüklenmeli.`);
-        return;
-      }
-
       const payloadPoints = points.map((point, index) => ({
         ...(point.id ? { id: point.id } : {}),
         name: (point.name || `TP${index + 1}`).trim() || `TP${index + 1}`,
         description: (point.description || '').trim(),
         x: Number(point.x.toFixed(4)),
-        y: Number(point.y.toFixed(4))
+        y: Number(point.y.toFixed(4)),
+        is_gnd: point.is_gnd || false
       }));
 
       const formData = new FormData();
@@ -632,7 +644,7 @@
       if (imageFile) { formData.append('image', imageFile); }
       formData.append('points_json', JSON.stringify(payloadPoints));
       points.forEach((point, index) => {
-        if (point.imageFile) { formData.append(`point_image_${index + 1}`, point.imageFile); }
+        if (point.imageFile) { formData.append(`point_image_${index}`, point.imageFile); }
       });
 
       const url = currentTestId ? `/api/library/tests/${currentTestId}` : '/api/library/tests';

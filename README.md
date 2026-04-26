@@ -125,6 +125,7 @@ python run.py
 	- Kart uzerine cift tiklayarak marker ekleyin.
 	- Marker adini/aciklamasini duzenleyin.
 	- Her nokta icin TP gorseli yukleyin (OCR verisi otomatik cikartilir).
+	- GND noktasini (opsiyonel): Test noktasi tablosunda "Ayarla" butonuna tiklayarak GND noktesini tanimlayabilirsiniz. Iki probe'li test cihazlarinda bir probe sabit GND noktasinda tutulur, diger probe ise test noktalarindan gecmek icin kullanilir. Sadece bir nokta GND olabilir.
 	- Kaydet butonuna basin.
 4. Mevcut test guncellemek icin:
 	- Kayitli testi listeden secin.
