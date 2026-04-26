@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Setup</title>
+  <link rel="stylesheet" href="/static/bootstrap.min.css">
+</head>
+<body class="bg-light">
+  <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom sticky-top">
+    <div class="container">
+      <a class="navbar-brand fw-semibold" href="/">VI Library</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="mainNav">
+        <div class="navbar-nav ms-auto gap-2 py-2 py-lg-0">
+          <a class="btn btn-outline-primary" href="/library">Kütüphane</a>
+          <a class="btn btn-secondary" href="/setup">Yönetim</a>
+          <a class="btn btn-danger" href="/logout">Çıkış</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+  <main class="container py-5">
+    <div class="row g-4 justify-content-center">
+      <div class="col-lg-6">
+        <div class="card shadow-sm border-0 mb-4">
+          <div class="card-body p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h1 class="h4 mb-0">Setup (Admin)</h1>
+            </div>
+
+            <h2 class="h5 mb-3">Şifre Değiştir</h2>
+            <form id="passwordForm" class="d-grid gap-2">
+              <input id="targetUsername" class="form-control" placeholder="Hedef kullanıcı (boş ise kendi hesabın)">
+              <input id="currentPassword" type="password" class="form-control" placeholder="Mevcut şifre">
+              <input id="newPassword" type="password" class="form-control" placeholder="Yeni şifre" required>
+              <button class="btn btn-outline-primary" type="submit">Şifreyi Güncelle</button>
+            </form>
+            <div id="passwordMessage" class="small mt-2"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-6">
+        <div class="card shadow-sm border-0">
+          <div class="card-body p-4">
+            <h2 class="h5 mb-3">Kullanıcı Yönetimi</h2>
+            <form id="createUserForm" class="d-grid gap-2 mb-3">
+              <input id="newUsername" class="form-control" placeholder="Yeni kullanıcı adı" required>
+              <input id="newUserPassword" type="password" class="form-control" placeholder="Şifre" required>
+              <div class="form-check">
+                <input id="newUserIsAdmin" type="checkbox" class="form-check-input">
+                <label class="form-check-label" for="newUserIsAdmin">Admin yetkisi ver</label>
+              </div>
+              <button class="btn btn-success" type="submit">Kullanıcı Ekle</button>
+            </form>
+
+            <button class="btn btn-sm btn-outline-dark mb-2" onclick="loadUsers()">Kullanıcıları Yenile</button>
+            <ul id="usersList" class="list-group small"></ul>
+            <div id="usersMessage" class="small mt-2"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row justify-content-center mt-1">
+      <div class="col-lg-12">
+        <div class="card shadow-sm border-0">
+          <div class="card-body p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h2 class="h5 mb-0">İşlem Logları</h2>
+              <div class="d-flex gap-2">
+                <input id="logsLimit" class="form-control form-control-sm" style="width: 120px;" type="number" min="1" max="500" value="100">
+                <button class="btn btn-sm btn-outline-dark" onclick="loadLogs()">Logları Yenile</button>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm table-striped align-middle mb-1">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Zaman</th>
+                    <th>Actor</th>
+                    <th>Action</th>
+                    <th>Target</th>
+                    <th>Details</th>
+                  </tr>
+                </thead>
+                <tbody id="logsBody"></tbody>
+              </table>
+            </div>
+            <div id="logsMessage" class="small mt-2"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let currentUser = null;
+
+    function setMessage(elementId, text, ok = false) {
+      const el = document.getElementById(elementId);
+      el.textContent = text;
+      el.className = ok ? 'small mt-2 text-success' : 'small mt-2 text-danger';
+    }
+
+    async function loadCurrentUser() {
+      const response = await fetch('/me');
+      if (!response.ok) {
+        window.location.href = '/login';
+        return;
+      }
+      currentUser = await response.json();
+      if (!currentUser.is_admin) {
+        window.location.href = '/';
+      }
+    }
+
+    async function loadUsers() {
+      const response = await fetch('/users');
+      const usersList = document.getElementById('usersList');
+      usersList.innerHTML = '';
+
+      if (!response.ok) {
+        setMessage('usersMessage', 'Kullanıcı listesi alınamadı.');
+        return;
+      }
+
+      const data = await response.json();
+      setMessage('usersMessage', 'Kullanıcı listesi güncellendi.', true);
+
+      data.users.forEach((user) => {
+        const item = document.createElement('li');
+        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+
+        const label = document.createElement('span');
+        label.textContent = `${user.username}${user.is_admin ? ' (admin)' : ''}`;
+
+        const deleteButton = document.createElement('button');
+        deleteButton.className = 'btn btn-sm btn-outline-danger';
+        deleteButton.textContent = 'Sil';
+        deleteButton.addEventListener('click', () => deleteUser(user.username));
+
+        item.appendChild(label);
+        item.appendChild(deleteButton);
+        usersList.appendChild(item);
+      });
+    }
+
+    async function deleteUser(username) {
+      const response = await fetch(`/users/${encodeURIComponent(username)}`, { method: 'DELETE' });
+      if (!response.ok) {
+        const errorData = await response.json();
+        setMessage('usersMessage', errorData.detail || 'Kullanıcı silinemedi');
+        return;
+      }
+      setMessage('usersMessage', 'Kullanıcı silindi', true);
+      loadUsers();
+      loadLogs();
+    }
+
+    document.getElementById('createUserForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const username = document.getElementById('newUsername').value;
+      const password = document.getElementById('newUserPassword').value;
+      const isAdmin = document.getElementById('newUserIsAdmin').checked;
+
+      const response = await fetch('/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, is_admin: isAdmin })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        setMessage('usersMessage', errorData.detail || 'Kullanıcı eklenemedi');
+        return;
+      }
+
+      event.target.reset();
+      setMessage('usersMessage', 'Kullanıcı eklendi', true);
+      loadUsers();
+      loadLogs();
+    });
+
+    document.getElementById('passwordForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const targetUsername = document.getElementById('targetUsername').value.trim();
+      const currentPassword = document.getElementById('currentPassword').value;
+      const newPassword = document.getElementById('newPassword').value;
+
+      const resolvedUsername = targetUsername || (currentUser ? currentUser.username : '');
+      if (!resolvedUsername) {
+        setMessage('passwordMessage', 'Kullanıcı bilgisi alınamadı, sayfayı yenileyin.');
+        return;
+      }
+
+      const response = await fetch(`/users/${encodeURIComponent(resolvedUsername)}/password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current_password: currentPassword || null, new_password: newPassword })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        setMessage('passwordMessage', errorData.detail || 'Şifre güncellenemedi');
+        return;
+      }
+
+      event.target.reset();
+      setMessage('passwordMessage', 'Şifre güncellendi', true);
+      loadLogs();
+    });
+
+    async function loadLogs() {
+      const logsBody = document.getElementById('logsBody');
+      logsBody.innerHTML = '';
+      const rawLimit = Number.parseInt(document.getElementById('logsLimit').value, 10);
+      const limit = Number.isNaN(rawLimit) ? 100 : Math.min(Math.max(rawLimit, 1), 500);
+
+      const response = await fetch(`/logs?limit=${limit}`);
+      if (!response.ok) {
+        setMessage('logsMessage', 'Loglar alınamadı.');
+        return;
+      }
+
+      const data = await response.json();
+      data.logs.forEach((log) => {
+        const row = document.createElement('tr');
+
+        const values = [
+          String(log.id),
+          log.created_at || '',
+          log.actor || '',
+          log.action || '',
+          log.target || '',
+          log.details || ''
+        ];
+
+        values.forEach((value) => {
+          const cell = document.createElement('td');
+          cell.textContent = value;
+          row.appendChild(cell);
+        });
+
+        logsBody.appendChild(row);
+      });
+
+      setMessage('logsMessage', `${data.logs.length} log gösteriliyor.`, true);
+    }
+
+    loadCurrentUser();
+    loadUsers();
+    loadLogs();
+  </script>
+  <script src="/static/bootstrap.min.js"></script>
+</body>
+</html>

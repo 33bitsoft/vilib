@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kütüphane</title>
+  <link rel="stylesheet" href="/static/bootstrap.min.css">
+  <style>
+    .image-stage {
+      overflow: auto;
+      border: 1px solid #dee2e6;
+      border-radius: 0.5rem;
+      background: #fff;
+      max-height: 60vh;
+    }
+
+    .zoom-target {
+      position: relative;
+      display: inline-block;
+      transform-origin: top left;
+    }
+
+    .board-image {
+      max-width: 100%;
+      display: block;
+      user-select: none;
+    }
+
+    .marker-layer {
+      position: absolute;
+      inset: 0;
+      cursor: crosshair;
+    }
+
+    .marker {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #b10000;
+      font-weight: 800;
+      font-size: 1rem;
+      line-height: 1;
+      border-radius: 999px;
+      border: 1px solid #111;
+      background: rgba(255, 255, 0, 0.95);
+      box-shadow: 0 0 0 1px #fff, 0 0 6px rgba(0, 0, 0, 0.35);
+      pointer-events: auto;
+      cursor: help;
+    }
+
+    .kucuk-dosya {
+      min-width: 180px;
+    }
+
+    .grafik-önizleme {
+      width: 64px;
+      height: 64px;
+      border-radius: 0.4rem;
+      border: 1px solid #dee2e6;
+      object-fit: cover;
+      background: #f8f9fa;
+    }
+  </style>
+</head>
+<body class="bg-light">
+  <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom sticky-top">
+    <div class="container">
+      <a class="navbar-brand fw-semibold" href="/">VI Library</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="mainNav">
+        <div class="navbar-nav ms-auto gap-2 py-2 py-lg-0">
+          <a class="btn btn-primary" href="/library">Kütüphane</a>
+          <a class="btn btn-outline-secondary" href="/setup">Yönetim</a>
+          <a class="btn btn-danger" href="/logout">Çıkış</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container-fluid px-3 px-md-4 px-xl-5 py-4">
+    <div class="row justify-content-center mb-3">
+      <div class="col-12 col-xxl-11">
+        <div class="card shadow-sm border-0">
+          <div class="card-body p-3 p-md-4">
+            <div class="row g-2 align-items-end">
+              <div class="col-12 col-md-8 col-lg-9">
+                <label class="form-label" for="testsDropdown">Kayıtlı Testler</label>
+                <select id="testsDropdown" class="form-select">
+                  <option value="">Test seçin...</option>
+                </select>
+              </div>
+              <div class="col-12 col-md-4 col-lg-3 d-grid">
+                <button class="btn btn-outline-dark" onclick="loadTests()">Listeyi Yenile</button>
+              </div>
+            </div>
+            <div id="testsMessage" class="small mt-2"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row justify-content-center g-4">
+      <div class="col-12 col-xxl-11">
+        <div class="card shadow-sm border-0 mb-4">
+          <div class="card-body p-3 p-md-4">
+            <h2 class="h5 mb-3">Yeni Test Verisi</h2>
+            <div class="row g-2 mb-3">
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="testName">Test İsmi</label>
+                <input id="testName" class="form-control" placeholder="Örnek: Kart-A Rev2" required>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="boardImageInput">Kart Fotoğrafı</label>
+                <input id="boardImageInput" class="form-control" type="file" accept="image/*">
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="testDescription">Açıklama</label>
+                <textarea id="testDescription" class="form-control" rows="2" placeholder="Test ile ilgili kısa açıklama girin..."></textarea>
+              </div>
+            </div>
+
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+              <label class="form-label mb-0" for="zoomRange">Zoom</label>
+              <input id="zoomRange" class="form-range" type="range" min="1" max="3" step="0.1" value="1" style="width: 220px;">
+              <span id="zoomValue" class="small text-muted">1.0x</span>
+              <button class="btn btn-sm btn-outline-secondary" onclick="clearPoints()">Noktaları Temizle</button>
+            </div>
+
+            <div class="image-stage p-2" id="imageStage">
+              <div class="zoom-target" id="zoomTarget" style="display:none;">
+                <img id="boardImage" class="board-image" alt="Kart fotoğrafı">
+                <div id="markerLayer" class="marker-layer"></div>
+              </div>
+              <div id="imageHint" class="text-muted small">Fotoğraf yükleyin, sonra test noktası eklemek için resim üzerine tıklayın.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card shadow-sm border-0">
+          <div class="card-body p-3 p-md-4">
+            <h2 class="h5 mb-3">Test Noktaları ve Ölçümler</h2>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle">
+                <thead>
+                  <tr>
+                    <th>Nokta</th>
+                    <th>Açıklama</th>
+                    <th>X</th>
+                    <th>Y</th>
+                    <th>TP Görseli</th>
+                    <th>V</th>
+                    <th>F</th>
+                    <th>R</th>
+                    <th>TOL</th>
+                    <th>Grafik</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="pointsTableBody"></tbody>
+              </table>
+            </div>
+            <div id="saveMessage" class="small mb-2"></div>
+            <button class="btn btn-success" onclick="saveTest()">Test Kütüphanesine Kaydet</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const testsDropdown = document.getElementById('testsDropdown');
+    const testsMessage = document.getElementById('testsMessage');
+    const saveMessage = document.getElementById('saveMessage');
+    const testNameInput = document.getElementById('testName');
+    const testDescriptionInput = document.getElementById('testDescription');
+    const boardImageInput = document.getElementById('boardImageInput');
+    const boardImage = document.getElementById('boardImage');
+    const markerLayer = document.getElementById('markerLayer');
+    const pointsTableBody = document.getElementById('pointsTableBody');
+    const zoomRange = document.getElementById('zoomRange');
+    const zoomTarget = document.getElementById('zoomTarget');
+    const zoomValue = document.getElementById('zoomValue');
+    const imageHint = document.getElementById('imageHint');
+
+    let points = [];
+
+    function setMessage(el, text, ok = false) {
+      el.textContent = text;
+      el.className = ok ? 'small text-success' : 'small text-danger';
+    }
+
+    function applyZoom() {
+      const zoom = Number.parseFloat(zoomRange.value);
+      zoomTarget.style.transform = `scale(${zoom})`;
+      zoomValue.textContent = `${zoom.toFixed(1)}x`;
+    }
+
+    function renderMarkers() {
+      markerLayer.innerHTML = '';
+      points.forEach((point) => {
+        const mark = document.createElement('span');
+        mark.className = 'marker';
+        mark.style.left = `${point.x}%`;
+        mark.style.top = `${point.y}%`;
+        mark.textContent = '+';
+        mark.title = point.name || 'Test noktası';
+        mark.setAttribute('aria-label', point.name || 'Test noktası');
+        markerLayer.appendChild(mark);
+      });
+    }
+
+    function renderTable() {
+      pointsTableBody.innerHTML = '';
+      points.forEach((point, index) => {
+        const row = document.createElement('tr');
+
+        const grafikHtml = point.measurement.grafik_gorsel_path
+          ? `<img class="grafik-önizleme" src="${point.measurement.grafik_gorsel_path}" alt="Grafik">`
+          : '<span class="text-muted small">-</span>';
+
+        const dosyaAdi = point.imageName || 'Dosya seçilmedi';
+
+        row.innerHTML = `
+          <td><input class="form-control form-control-sm" value="${point.name}" data-field="name" data-index="${index}"></td>
+          <td><input class="form-control form-control-sm" value="${point.description || ''}" data-field="description" data-index="${index}"></td>
+          <td>${point.x.toFixed(2)}</td>
+          <td>${point.y.toFixed(2)}</td>
+          <td>
+            <input class="form-control form-control-sm kucuk-dosya" type="file" accept="image/*" data-action="point-image" data-index="${index}">
+            <div class="small text-muted mt-1">${dosyaAdi}</div>
+          </td>
+          <td><input class="form-control form-control-sm" value="${point.measurement.v}" data-field="v" data-index="${index}" readonly></td>
+          <td><input class="form-control form-control-sm" value="${point.measurement.f}" data-field="f" data-index="${index}" readonly></td>
+          <td><input class="form-control form-control-sm" value="${point.measurement.r}" data-field="r" data-index="${index}" readonly></td>
+          <td><input class="form-control form-control-sm" value="${point.measurement.tol}" data-field="tol" data-index="${index}" readonly></td>
+          <td>${grafikHtml}</td>
+          <td><button class="btn btn-sm btn-outline-danger" data-action="delete" data-index="${index}">Sil</button></td>
+        `;
+
+        pointsTableBody.appendChild(row);
+      });
+    }
+
+    function clearPoints() {
+      points = [];
+      renderMarkers();
+      renderTable();
+    }
+
+    function addPointFromClick(event) {
+      if (zoomTarget.style.display === 'none') {
+        return;
+      }
+
+      const rect = markerLayer.getBoundingClientRect();
+      const x = ((event.clientX - rect.left) / rect.width) * 100;
+      const y = ((event.clientY - rect.top) / rect.height) * 100;
+      const nextIndex = points.length + 1;
+      points.push({
+        name: `TP${nextIndex}`,
+        description: '',
+        x,
+        y,
+        imageFile: null,
+        imageName: '',
+        measurement: { v: '', f: '', r: '', tol: '', grafik: '', grafik_gorsel_path: '' }
+      });
+      renderMarkers();
+      renderTable();
+    }
+
+    boardImageInput.addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (!file) {
+        return;
+      }
+
+      boardImage.src = URL.createObjectURL(file);
+      zoomTarget.style.display = 'inline-block';
+      imageHint.classList.add('d-none');
+      clearPoints();
+    });
+
+    markerLayer.addEventListener('click', addPointFromClick);
+    zoomRange.addEventListener('input', applyZoom);
+    applyZoom();
+
+    pointsTableBody.addEventListener('input', (event) => {
+      const index = Number.parseInt(event.target.dataset.index, 10);
+      const field = event.target.dataset.field;
+      if (Number.isNaN(index) || !field || !points[index]) {
+        return;
+      }
+
+      if (field === 'name') {
+        points[index].name = event.target.value || `TP${index + 1}`;
+      }
+      if (field === 'description') {
+        points[index].description = event.target.value || '';
+      }
+    });
+
+    pointsTableBody.addEventListener('click', (event) => {
+      const index = Number.parseInt(event.target.dataset.index, 10);
+      if (event.target.dataset.action !== 'delete' || Number.isNaN(index)) {
+        return;
+      }
+      points.splice(index, 1);
+      points.forEach((point, idx) => {
+        if (!point.name || point.name.startsWith('TP')) {
+          point.name = `TP${idx + 1}`;
+        }
+      });
+      renderMarkers();
+      renderTable();
+    });
+
+    pointsTableBody.addEventListener('change', async (event) => {
+      const index = Number.parseInt(event.target.dataset.index, 10);
+      if (event.target.dataset.action !== 'point-image' || Number.isNaN(index) || !points[index]) {
+        return;
+      }
+
+      const file = event.target.files[0];
+      if (!file) {
+        return;
+      }
+
+      points[index].imageFile = file;
+      points[index].imageName = file.name;
+      setMessage(saveMessage, `${points[index].name} görseli işleniyor...`, true);
+
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const response = await fetch('/api/library/process-testpoint-image', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        setMessage(saveMessage, errorData.detail || 'Test point görseli işlenemedi.');
+        return;
+      }
+
+      const data = await response.json();
+      points[index].measurement = {
+        v: data.measurement.v || '',
+        f: data.measurement.f || '',
+        r: data.measurement.r || '',
+        tol: data.measurement.tol || '',
+        grafik: data.measurement.grafik || '',
+        grafik_gorsel_path: data.measurement.grafik_gorsel_path || ''
+      };
+      renderTable();
+      setMessage(saveMessage, `${points[index].name} için ölçümler çıkarıldı.`, true);
+    });
+
+    async function loadTests() {
+      testsDropdown.innerHTML = '<option value="">Test seçin...</option>';
+      const response = await fetch('/api/library/tests');
+      if (!response.ok) {
+        setMessage(testsMessage, 'Test listesi alınamadı.');
+        return;
+      }
+
+      const data = await response.json();
+      setMessage(testsMessage, `${data.tests.length} test kaydı bulundu.`, true);
+
+      data.tests.forEach((test) => {
+        const option = document.createElement('option');
+        option.value = String(test.id);
+        option.textContent = `${test.name} (${test.point_count} TP)`;
+        testsDropdown.appendChild(option);
+      });
+    }
+
+    testsDropdown.addEventListener('change', (event) => {
+      const id = Number.parseInt(event.target.value, 10);
+      if (!Number.isNaN(id)) {
+        loadTestDetail(id);
+      }
+    });
+
+    async function loadTestDetail(testId) {
+      const response = await fetch(`/api/library/tests/${testId}`);
+      if (!response.ok) {
+        setMessage(saveMessage, 'Test detayı alınamadı.');
+        return;
+      }
+
+      const data = await response.json();
+      testNameInput.value = data.test.name;
+      testDescriptionInput.value = data.test.description || '';
+      boardImage.src = data.test.image_path;
+      zoomTarget.style.display = 'inline-block';
+      imageHint.classList.add('d-none');
+      points = data.points.map((point, index) => ({
+        name: point.name || `TP${index + 1}`,
+        description: point.description || '',
+        x: Number.parseFloat(point.x),
+        y: Number.parseFloat(point.y),
+        imageFile: null,
+        imageName: '',
+        measurement: {
+          v: point.measurement.v || '',
+          f: point.measurement.f || '',
+          r: point.measurement.r || '',
+          tol: point.measurement.tol || '',
+          grafik: point.measurement.grafik || '',
+          grafik_gorsel_path: point.measurement.grafik_gorsel_path || ''
+        }
+      }));
+      renderMarkers();
+      renderTable();
+      setMessage(saveMessage, `Test yüklendi: ${data.test.name}`, true);
+    }
+
+    async function saveTest() {
+      const testName = testNameInput.value.trim();
+      const testDescription = testDescriptionInput.value.trim();
+      const imageFile = boardImageInput.files[0];
+      if (!testName) {
+        setMessage(saveMessage, 'Test ismi zorunlu.');
+        return;
+      }
+      if (!imageFile) {
+        setMessage(saveMessage, 'Yeni kayıt için kart fotoğrafı seçilmesi zorunlu.');
+        return;
+      }
+      if (points.length === 0) {
+        setMessage(saveMessage, 'En az bir test noktası ekleyin.');
+        return;
+      }
+
+      const eksikGorsel = points.find((point) => !point.imageFile);
+      if (eksikGorsel) {
+        setMessage(saveMessage, `${eksikGorsel.name} için test point görseli yüklenmeli.`);
+        return;
+      }
+
+      const payloadPoints = points.map((point, index) => ({
+        name: (point.name || `TP${index + 1}`).trim() || `TP${index + 1}`,
+        description: (point.description || '').trim(),
+        x: Number(point.x.toFixed(4)),
+        y: Number(point.y.toFixed(4))
+      }));
+
+      const formData = new FormData();
+      formData.append('test_name', testName);
+      formData.append('test_description', testDescription);
+      formData.append('image', imageFile);
+      formData.append('points_json', JSON.stringify(payloadPoints));
+      points.forEach((point, index) => {
+        formData.append(`point_image_${index + 1}`, point.imageFile);
+      });
+
+      const response = await fetch('/api/library/tests', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        setMessage(saveMessage, errorData.detail || 'Kayıt işlemi başarısız.');
+        return;
+      }
+
+      boardImageInput.value = '';
+      testDescriptionInput.value = '';
+      clearPoints();
+      setMessage(saveMessage, 'Test kaydı oluşturuldu.', true);
+      await loadTests();
+    }
+
+    loadTests();
+  </script>
+  <script src="/static/bootstrap.min.js"></script>
+</body>
+</html>

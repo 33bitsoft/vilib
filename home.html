@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ana Sayfa</title>
+  <link rel="stylesheet" href="/static/bootstrap.min.css">
+  <style>
+    .test-grid {
+      align-items: start;
+    }
+
+    .detail-panel {
+      position: sticky;
+      top: 84px;
+    }
+
+    @media (max-width: 991.98px) {
+      .detail-panel {
+        position: static;
+      }
+    }
+
+    .image-stage {
+      overflow: auto;
+      border: 1px solid #dee2e6;
+      border-radius: 0.5rem;
+      background: #fff;
+      max-height: 72vh;
+      cursor: grab;
+    }
+
+    .image-stage.panning {
+      cursor: grabbing;
+      user-select: none;
+    }
+
+    .zoom-target {
+      position: relative;
+      display: inline-block;
+      transform-origin: top left;
+    }
+
+    .board-image {
+      max-width: 100%;
+      display: block;
+      user-select: none;
+    }
+
+    .marker-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .marker {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #b10000;
+      font-weight: 800;
+      font-size: 1rem;
+      line-height: 1;
+      border-radius: 999px;
+      border: 1px solid #111;
+      background: rgba(255, 255, 0, 0.10);
+      box-shadow: 0 0 0 1px #fff, 0 0 6px rgba(0, 0, 0, 0.35);
+      cursor: pointer;
+      pointer-events: auto;
+    }
+
+    .marker.active {
+      background: rgba(255, 152, 0, 0.10);
+      color: #111;
+      width: 24px;
+      height: 24px;
+    }
+
+    .grafik-gercek-boyut {
+      max-width: none;
+      width: auto;
+      height: auto;
+      image-rendering: pixelated;
+      border: 1px solid #dee2e6;
+      background: #f8f9fa;
+      border-radius: 0.25rem;
+    }
+  </style>
+</head>
+<body class="bg-light">
+  <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom sticky-top">
+    <div class="container">
+      <a class="navbar-brand fw-semibold" href="/">VI Library</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="mainNav">
+        <div class="navbar-nav ms-auto gap-2 py-2 py-lg-0">
+          <a id="libraryLink" class="btn btn-outline-primary" href="/library">Kütüphane</a>
+          <a id="setupLink" class="btn btn-outline-secondary" href="/setup">Yönetim</a>
+          <a class="btn btn-danger" href="/logout">Çıkış</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container-fluid px-3 px-md-4 px-xl-5 py-4">
+    <div class="row justify-content-center mb-3">
+      <div class="col-12 col-xxl-11">
+        <div class="card shadow-sm border-0">
+          <div class="card-body p-3 p-md-4">
+            <div class="row g-2 align-items-end">
+              <div class="col-12 col-lg-5">
+                <label class="form-label" for="testsDropdown">Kayıtlı Testler</label>
+                <select id="testsDropdown" class="form-select">
+                  <option value="">Test seçin...</option>
+                </select>
+              </div>
+              <div class="col-12 col-lg-5">
+                <label class="form-label" for="pointsDropdown">Test Noktası</label>
+                <select id="pointsDropdown" class="form-select">
+                  <option value="">Nokta seçin...</option>
+                </select>
+              </div>
+              <div class="col-12 col-lg-2 d-grid">
+                <button class="btn btn-outline-dark" onclick="loadTests()">Listeyi Yenile</button>
+              </div>
+            </div>
+            <div id="testsMessage" class="small mt-2"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row justify-content-center g-4 test-grid">
+      <div class="col-12 col-xl-8">
+        <div class="card shadow-sm border-0">
+          <div class="card-body p-3 p-md-4">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+              <label class="form-label mb-0" for="zoomRange">Zoom</label>
+              <input id="zoomRange" class="form-range" type="range" min="1" max="4" step="0.1" value="1" style="width: 240px;">
+              <span id="zoomValue" class="small text-muted">1.0x</span>
+              <span id="selectedPointLabel" class="small text-muted ms-2">Nokta seçilmedi</span>
+            </div>
+
+            <div class="image-stage p-2" id="imageStage">
+              <div class="zoom-target" id="zoomTarget" style="display:none;">
+                <img id="boardImage" class="board-image" alt="Kart fotoğrafı">
+                <div id="markerLayer" class="marker-layer"></div>
+              </div>
+              <div id="imageHint" class="text-muted small">Açılır listeden bir test seçin.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-xl-4">
+        <div class="card shadow-sm border-0 detail-panel">
+          <div class="card-body p-3 p-md-4">
+            <h2 class="h5 mb-3">Seçilen Test Noktası</h2>
+            <div class="table-responsive mb-3">
+              <table class="table table-sm align-middle mb-0">
+                <tbody>
+                  <tr><th>Nokta</th><td id="detName">-</td></tr>
+                  <tr><th>Açıklama</th><td id="detDescription">-</td></tr>
+                  <tr><th>V</th><td id="detV">-</td></tr>
+                  <tr><th>F</th><td id="detF">-</td></tr>
+                  <tr><th>R</th><td id="detR">-</td></tr>
+                  <tr><th>TOL</th><td id="detTol">-</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <label class="form-label">Grafik Görseli (Gerçek Boyut)</label>
+            <div class="overflow-auto border rounded p-2 bg-white" style="max-height: 360px;">
+              <img id="detGraph" class="grafik-gercek-boyut d-none" alt="Grafik görseli">
+              <div id="graphHint" class="text-muted small">Nokta seçince grafik görseli burada gösterilecek.</div>
+            </div>
+            <div id="detailMessage" class="small mt-2"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const testsDropdown = document.getElementById('testsDropdown');
+    const pointsDropdown = document.getElementById('pointsDropdown');
+    const testsMessage = document.getElementById('testsMessage');
+    const detailMessage = document.getElementById('detailMessage');
+    const zoomRange = document.getElementById('zoomRange');
+    const zoomValue = document.getElementById('zoomValue');
+    const zoomTarget = document.getElementById('zoomTarget');
+    const boardImage = document.getElementById('boardImage');
+    const markerLayer = document.getElementById('markerLayer');
+    const imageStage = document.getElementById('imageStage');
+    const imageHint = document.getElementById('imageHint');
+    const selectedPointLabel = document.getElementById('selectedPointLabel');
+    const libraryLink = document.getElementById('libraryLink');
+    const setupLink = document.getElementById('setupLink');
+
+    const detName = document.getElementById('detName');
+    const detDescription = document.getElementById('detDescription');
+    const detV = document.getElementById('detV');
+    const detF = document.getElementById('detF');
+    const detR = document.getElementById('detR');
+    const detTol = document.getElementById('detTol');
+    const detGraph = document.getElementById('detGraph');
+    const graphHint = document.getElementById('graphHint');
+
+    let points = [];
+    let activePointIndex = -1;
+
+    let isPanning = false;
+    let panStartX = 0;
+    let panStartY = 0;
+    let panScrollLeft = 0;
+    let panScrollTop = 0;
+
+    function setMessage(el, text, ok = false) {
+      el.textContent = text;
+      el.className = ok ? 'small text-success mt-2' : 'small text-danger mt-2';
+    }
+
+    function applyZoom() {
+      const zoom = Number.parseFloat(zoomRange.value);
+      zoomTarget.style.transform = `scale(${zoom})`;
+      zoomValue.textContent = `${zoom.toFixed(1)}x`;
+    }
+
+    function clearPointDetail() {
+      detName.textContent = '-';
+      detDescription.textContent = '-';
+      detV.textContent = '-';
+      detF.textContent = '-';
+      detR.textContent = '-';
+      detTol.textContent = '-';
+      detGraph.classList.add('d-none');
+      detGraph.removeAttribute('src');
+      graphHint.classList.remove('d-none');
+      selectedPointLabel.textContent = 'Nokta seçilmedi';
+      pointsDropdown.value = '';
+      activePointIndex = -1;
+    }
+
+    function renderPointsDropdown() {
+      pointsDropdown.innerHTML = '<option value="">Nokta seçin...</option>';
+      points.forEach((point, index) => {
+        const option = document.createElement('option');
+        option.value = String(index);
+        option.textContent = point.name || `TP${index + 1}`;
+        pointsDropdown.appendChild(option);
+      });
+    }
+
+    function showPointDetail(index) {
+      const point = points[index];
+      if (!point) {
+        clearPointDetail();
+        return;
+      }
+
+      activePointIndex = index;
+      selectedPointLabel.textContent = `Seçilen: ${point.name || `TP${index + 1}`}`;
+      detName.textContent = point.name || '-';
+      detDescription.textContent = point.description || '-';
+      detV.textContent = point.measurement.v || '-';
+      detF.textContent = point.measurement.f || '-';
+      detR.textContent = point.measurement.r || '-';
+      detTol.textContent = point.measurement.tol || '-';
+      pointsDropdown.value = String(index);
+
+      if (point.measurement.grafik_gorsel_path) {
+        detGraph.src = point.measurement.grafik_gorsel_path;
+        detGraph.classList.remove('d-none');
+        graphHint.classList.add('d-none');
+      } else {
+        detGraph.classList.add('d-none');
+        detGraph.removeAttribute('src');
+        graphHint.classList.remove('d-none');
+      }
+
+      renderMarkers();
+    }
+
+    function renderMarkers() {
+      markerLayer.innerHTML = '';
+      points.forEach((point, index) => {
+        const mark = document.createElement('button');
+        mark.type = 'button';
+        mark.className = `marker${index === activePointIndex ? ' active' : ''}`;
+        mark.style.left = `${point.x}%`;
+        mark.style.top = `${point.y}%`;
+        mark.textContent = '+';
+        mark.title = point.name || `TP${index + 1}`;
+        mark.addEventListener('click', () => showPointDetail(index));
+        markerLayer.appendChild(mark);
+      });
+    }
+
+    async function loadCurrentUser() {
+      const response = await fetch('/me');
+      if (!response.ok) {
+        window.location.href = '/login';
+        return;
+      }
+
+      const me = await response.json();
+      if (!me.is_admin) {
+        libraryLink.classList.add('d-none');
+        setupLink.classList.add('d-none');
+      }
+    }
+
+    async function loadTests() {
+      testsDropdown.innerHTML = '<option value="">Test seçin...</option>';
+      pointsDropdown.innerHTML = '<option value="">Nokta seçin...</option>';
+      clearPointDetail();
+
+      const response = await fetch('/api/library/tests');
+      if (!response.ok) {
+        setMessage(testsMessage, 'Test listesi alınamadı.');
+        return;
+      }
+
+      const data = await response.json();
+      setMessage(testsMessage, `${data.tests.length} test kaydı bulundu.`, true);
+
+      data.tests.forEach((test) => {
+        const option = document.createElement('option');
+        option.value = String(test.id);
+        option.textContent = `${test.name} (${test.point_count} TP)`;
+        testsDropdown.appendChild(option);
+      });
+    }
+
+    async function loadTestDetail(testId) {
+      const response = await fetch(`/api/library/tests/${testId}`);
+      if (!response.ok) {
+        setMessage(detailMessage, 'Test detayı alınamadı.');
+        return;
+      }
+
+      const data = await response.json();
+      boardImage.src = data.test.image_path;
+      zoomTarget.style.display = 'inline-block';
+      imageHint.classList.add('d-none');
+      points = data.points.map((point, index) => ({
+        name: point.name || `TP${index + 1}`,
+        description: point.description || '',
+        x: Number.parseFloat(point.x),
+        y: Number.parseFloat(point.y),
+        measurement: {
+          v: point.measurement.v || '',
+          f: point.measurement.f || '',
+          r: point.measurement.r || '',
+          tol: point.measurement.tol || '',
+          grafik_gorsel_path: point.measurement.grafik_gorsel_path || ''
+        }
+      }));
+
+      renderPointsDropdown();
+      clearPointDetail();
+      renderMarkers();
+      if (points.length > 0) {
+        showPointDetail(0);
+      }
+      setMessage(detailMessage, `Test yüklendi: ${data.test.name}. Noktayı listeden veya markerdan seçin.`, true);
+    }
+
+    testsDropdown.addEventListener('change', (event) => {
+      const id = Number.parseInt(event.target.value, 10);
+      if (Number.isNaN(id)) {
+        return;
+      }
+      loadTestDetail(id);
+    });
+
+    pointsDropdown.addEventListener('change', (event) => {
+      const pointIndex = Number.parseInt(event.target.value, 10);
+      if (Number.isNaN(pointIndex)) {
+        clearPointDetail();
+        renderMarkers();
+        return;
+      }
+      showPointDetail(pointIndex);
+    });
+
+    imageStage.addEventListener('mousedown', (event) => {
+      if (event.button !== 0) {
+        return;
+      }
+      if (event.target.closest('.marker')) {
+        return;
+      }
+
+      isPanning = true;
+      imageStage.classList.add('panning');
+      panStartX = event.clientX;
+      panStartY = event.clientY;
+      panScrollLeft = imageStage.scrollLeft;
+      panScrollTop = imageStage.scrollTop;
+      event.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (event) => {
+      if (!isPanning) {
+        return;
+      }
+      const dx = event.clientX - panStartX;
+      const dy = event.clientY - panStartY;
+      imageStage.scrollLeft = panScrollLeft - dx;
+      imageStage.scrollTop = panScrollTop - dy;
+    });
+
+    const stopPanning = () => {
+      if (!isPanning) {
+        return;
+      }
+      isPanning = false;
+      imageStage.classList.remove('panning');
+    };
+
+    window.addEventListener('mouseup', stopPanning);
+    imageStage.addEventListener('mouseleave', stopPanning);
+
+    zoomRange.addEventListener('input', applyZoom);
+    applyZoom();
+    loadCurrentUser();
+    loadTests();
+  </script>
+  <script src="/static/bootstrap.min.js"></script>
+</body>
+</html>
