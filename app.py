@@ -99,6 +99,7 @@ def _init_db() -> None:
                 test_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 x REAL NOT NULL,
+                pair_with TEXT,
                 y REAL NOT NULL,
                 v TEXT,
                 f TEXT,
@@ -121,6 +122,7 @@ def _init_db() -> None:
         _kolon_ekle(connection, "testpoints", "grafik", "TEXT")
         _kolon_ekle(connection, "testpoints", "description", "TEXT")
         _kolon_ekle(connection, "testpoints", "is_gnd", "INTEGER NOT NULL DEFAULT 0")
+        _kolon_ekle(connection, "testpoints", "pair_with", "TEXT")
         _migrate_library_schema(connection)
 
 
@@ -553,6 +555,7 @@ def get_library_test(test_id: int, request: Request):
                 tp.id,
                 tp.name,
                 tp.x,
+                tp.pair_with,
                 tp.y,
                 tp.description,
                 tp.sort_order,
@@ -580,6 +583,7 @@ def get_library_test(test_id: int, request: Request):
             "name": row["name"],
             "x": row["x"],
             "y": row["y"],
+            "pair_with": row["pair_with"] or "",
             "description": row["description"] or "",
             "is_gnd": bool(row["is_gnd"]),
             "measurement": {
@@ -706,6 +710,7 @@ async def create_library_test(request: Request):
         for index, point in enumerate(parsed_points):
             point_num = index + 1
             point_name = str(point.get("name") or f"TP{point_num}")
+            pair_with = str(point.get("pair_with") or "").strip()
             x = float(point.get("x", 0))
             y = float(point.get("y", 0))
             point_description = str(point.get("description") or "")
@@ -725,13 +730,14 @@ async def create_library_test(request: Request):
 
             connection.execute(
                 """
-                INSERT INTO testpoints (test_id, name, x, y, v, f, r, tol, grafik, description, sort_order, is_gnd)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO testpoints (test_id, name, x, pair_with, y, v, f, r, tol, grafik, description, sort_order, is_gnd)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     test_id,
                     point_name,
                     x,
+                    pair_with,
                     y,
                     str(extracted.get("v", "")),
                     str(extracted.get("f", "")),
@@ -815,6 +821,7 @@ async def update_library_test(test_id: int, request: Request):
             point_num = index + 1
             point_id = point.get("id")
             point_name = str(point.get("name") or f"TP{point_num}")
+            pair_with = str(point.get("pair_with") or "").strip()
             x = float(point.get("x", 0))
             y = float(point.get("y", 0))
             point_description = str(point.get("description") or "")
@@ -835,11 +842,11 @@ async def update_library_test(test_id: int, request: Request):
                         connection.execute(
                             """
                             UPDATE testpoints
-                            SET name=?, x=?, y=?, description=?, v=?, f=?, r=?, tol=?, grafik=?, sort_order=?, is_gnd=?
+                            SET name=?, x=?, y=?, pair_with=?, description=?, v=?, f=?, r=?, tol=?, grafik=?, sort_order=?, is_gnd=?
                             WHERE id=?
                             """,
                             (
-                                point_name, x, y, point_description,
+                                point_name, x, y, pair_with, point_description,
                                 str(extracted.get("v", "")), str(extracted.get("f", "")),
                                 str(extracted.get("r", "")), str(extracted.get("tol", "")),
                                 str(extracted.get("grafik", "")), point_num, is_gnd, int(point_id),
@@ -847,13 +854,13 @@ async def update_library_test(test_id: int, request: Request):
                         )
                     else:
                         connection.execute(
-                            "UPDATE testpoints SET name=?, x=?, y=?, description=?, sort_order=?, is_gnd=? WHERE id=?",
-                            (point_name, x, y, point_description, point_num, is_gnd, int(point_id)),
+                            "UPDATE testpoints SET name=?, x=?, y=?, pair_with=?, description=?, sort_order=?, is_gnd=? WHERE id=?",
+                            (point_name, x, y, pair_with, point_description, point_num, is_gnd, int(point_id)),
                         )
                 else:
                     connection.execute(
-                        "UPDATE testpoints SET name=?, x=?, y=?, description=?, sort_order=?, is_gnd=? WHERE id=?",
-                        (point_name, x, y, point_description, point_num, is_gnd, int(point_id)),
+                        "UPDATE testpoints SET name=?, x=?, y=?, pair_with=?, description=?, sort_order=?, is_gnd=? WHERE id=?",
+                        (point_name, x, y, pair_with, point_description, point_num, is_gnd, int(point_id)),
                     )
             else:
                 extracted = {"v": "", "f": "", "r": "", "tol": "", "grafik": ""}
@@ -866,11 +873,11 @@ async def update_library_test(test_id: int, request: Request):
                             raise HTTPException(status_code=400, detail=f"TP{point_num} işleme hatası: {exc}") from exc
                 connection.execute(
                     """
-                    INSERT INTO testpoints (test_id, name, x, y, v, f, r, tol, grafik, description, sort_order, is_gnd)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO testpoints (test_id, name, x, pair_with, y, v, f, r, tol, grafik, description, sort_order, is_gnd)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        test_id, point_name, x, y,
+                        test_id, point_name, x, pair_with, y,
                         str(extracted.get("v", "")), str(extracted.get("f", "")),
                         str(extracted.get("r", "")), str(extracted.get("tol", "")),
                         str(extracted.get("grafik", "")), point_description, point_num, is_gnd,

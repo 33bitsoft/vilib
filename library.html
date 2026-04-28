@@ -177,6 +177,7 @@
                 <thead>
                   <tr>
                     <th>Nokta</th>
+                    <th>Referans TP</th>
                     <th>Açıklama</th>
                     <th>X</th>
                     <th>Y</th>
@@ -309,9 +310,37 @@
         const dosyaAdi = point.imageName || 'Dosya seçilmedi';
         const gndButtonClass = point.is_gnd ? 'btn-success' : 'btn-outline-secondary';
         const gndButtonText = point.is_gnd ? 'GND ✓' : 'Ayarla';
+        const currentPair = (point.pair_with || '').trim();
+        const referansSecenekleri = points
+          .map((candidate, candidateIndex) => {
+            if (candidateIndex === index) {
+              return '';
+            }
+            const candidateName = (candidate.name || `TP${candidateIndex + 1}`).trim() || `TP${candidateIndex + 1}`;
+            const selected = currentPair === candidateName ? ' selected' : '';
+            return `<option value="${candidateName}"${selected}>${candidateName}</option>`;
+          })
+          .join('');
+        const referansMevcutDegil = currentPair && !points.some((candidate, candidateIndex) => {
+          if (candidateIndex === index) {
+            return false;
+          }
+          const candidateName = (candidate.name || `TP${candidateIndex + 1}`).trim() || `TP${candidateIndex + 1}`;
+          return candidateName === currentPair;
+        });
+        const referansFallback = referansMevcutDegil
+          ? `<option value="${currentPair}" selected>${currentPair}</option>`
+          : '';
 
         row.innerHTML = `
           <td><input class="form-control form-control-sm" value="${point.name}" data-field="name" data-index="${index}"></td>
+          <td>
+            <select class="form-select form-select-sm" data-field="pair_with" data-index="${index}">
+              <option value="">Referans seçin...</option>
+              ${referansSecenekleri}
+              ${referansFallback}
+            </select>
+          </td>
           <td><input class="form-control form-control-sm" value="${point.description || ''}" data-field="description" data-index="${index}"></td>
           <td>${point.x.toFixed(2)}</td>
           <td>${point.y.toFixed(2)}</td>
@@ -349,6 +378,7 @@
       const nextIndex = points.length + 1;
       points.push({
         name: `TP${nextIndex}`,
+        pair_with: '',
         description: '',
         x,
         y,
@@ -467,7 +497,16 @@
 
     pointsTableBody.addEventListener('change', async (event) => {
       const index = Number.parseInt(event.target.dataset.index, 10);
-      if (event.target.dataset.action !== 'point-image' || Number.isNaN(index) || !points[index]) {
+      if (Number.isNaN(index) || !points[index]) {
+        return;
+      }
+
+      if (event.target.dataset.field === 'pair_with') {
+        points[index].pair_with = event.target.value || '';
+        return;
+      }
+
+      if (event.target.dataset.action !== 'point-image') {
         return;
       }
 
@@ -592,6 +631,7 @@
       points = data.points.map((point, index) => ({
         id: point.id,
         name: point.name || `TP${index + 1}`,
+        pair_with: point.pair_with || '',
         description: point.description || '',
         x: Number.parseFloat(point.x),
         y: Number.parseFloat(point.y),
@@ -632,6 +672,7 @@
       const payloadPoints = points.map((point, index) => ({
         ...(point.id ? { id: point.id } : {}),
         name: (point.name || `TP${index + 1}`).trim() || `TP${index + 1}`,
+        pair_with: (point.pair_with || '').trim(),
         description: (point.description || '').trim(),
         x: Number(point.x.toFixed(4)),
         y: Number(point.y.toFixed(4)),

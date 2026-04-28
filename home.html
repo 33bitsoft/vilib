@@ -130,7 +130,7 @@
               <div class="col-12 col-lg-5">
                 <label class="form-label" for="pointsDropdown">Test Noktası</label>
                 <select id="pointsDropdown" class="form-select">
-                  <option value="">Nokta seçin...</option>
+                  <option value="">Nokta çifti seçin...</option>
                 </select>
               </div>
               <div class="col-12 col-lg-2 d-grid">
@@ -151,7 +151,7 @@
               <label class="form-label mb-0" for="zoomRange">Zoom</label>
               <input id="zoomRange" class="form-range" type="range" min="1" max="4" step="0.1" value="1" style="width: 240px;">
               <span id="zoomValue" class="small text-muted">1.0x</span>
-              <span id="selectedPointLabel" class="small text-muted ms-2">Nokta seçilmedi</span>
+              <span id="selectedPointLabel" class="small text-muted ms-2">Nokta çifti seçilmedi</span>
             </div>
 
             <div class="image-stage p-2" id="imageStage">
@@ -168,11 +168,12 @@
       <div class="col-12 col-xl-4">
         <div class="card shadow-sm border-0 detail-panel">
           <div class="card-body p-3 p-md-4">
-            <h2 class="h5 mb-3">Seçilen Test Noktası</h2>
+            <h2 class="h5 mb-3">Seçilen Ölçüm Kaydı</h2>
             <div class="table-responsive mb-3">
               <table class="table table-sm align-middle mb-0">
                 <tbody>
-                  <tr><th>Nokta</th><td id="detName">-</td></tr>
+                  <tr><th>Nokta Çifti</th><td id="detPair">-</td></tr>
+                  <tr><th>Ölçüm Noktası</th><td id="detName">-</td></tr>
                   <tr><th>Açıklama</th><td id="detDescription">-</td></tr>
                   <tr><th>V</th><td id="detV">-</td></tr>
                   <tr><th>F</th><td id="detF">-</td></tr>
@@ -213,6 +214,7 @@
     const libraryLink = document.getElementById('libraryLink');
     const setupLink = document.getElementById('setupLink');
 
+    const detPair = document.getElementById('detPair');
     const detName = document.getElementById('detName');
     const detDescription = document.getElementById('detDescription');
     const detV = document.getElementById('detV');
@@ -254,7 +256,27 @@
       zoomValue.textContent = `${zoom.toFixed(1)}x`;
     }
 
+    function getPointName(point, index) {
+      return point.name || `TP${index + 1}`;
+    }
+
+    function getPairLabel(point, index) {
+      const currentName = getPointName(point, index);
+      const explicitPair = String(point.pair_with || '').trim();
+      if (explicitPair) {
+        return `${explicitPair} - ${currentName}`;
+      }
+
+      const gndPoint = points.find((item, itemIndex) => itemIndex !== index && item.is_gnd);
+      if (gndPoint) {
+        return `${getPointName(gndPoint, points.indexOf(gndPoint))} - ${currentName}`;
+      }
+
+      return `${currentName} - ?`;
+    }
+
     function clearPointDetail() {
+      detPair.textContent = '-';
       detName.textContent = '-';
       detDescription.textContent = '-';
       detV.textContent = '-';
@@ -264,17 +286,17 @@
       detGraph.classList.add('d-none');
       detGraph.removeAttribute('src');
       graphHint.classList.remove('d-none');
-      selectedPointLabel.textContent = 'Nokta seçilmedi';
+      selectedPointLabel.textContent = 'Nokta çifti seçilmedi';
       pointsDropdown.value = '';
       activePointIndex = -1;
     }
 
     function renderPointsDropdown() {
-      pointsDropdown.innerHTML = '<option value="">Nokta seçin...</option>';
+      pointsDropdown.innerHTML = '<option value="">Nokta çifti seçin...</option>';
       points.forEach((point, index) => {
         const option = document.createElement('option');
         option.value = String(index);
-        option.textContent = point.name || `TP${index + 1}`;
+        option.textContent = getPairLabel(point, index);
         pointsDropdown.appendChild(option);
       });
     }
@@ -287,8 +309,9 @@
       }
 
       activePointIndex = index;
-      selectedPointLabel.textContent = `Seçilen: ${point.name || `TP${index + 1}`}`;
-      detName.textContent = point.name || '-';
+      selectedPointLabel.textContent = `Seçilen: ${getPairLabel(point, index)}`;
+      detPair.textContent = getPairLabel(point, index);
+      detName.textContent = getPointName(point, index);
       detDescription.textContent = point.description || '-';
       detV.textContent = point.measurement.v || '-';
       detF.textContent = point.measurement.f || '-';
@@ -318,7 +341,7 @@
         mark.style.left = `${point.x}%`;
         mark.style.top = `${point.y}%`;
         mark.textContent = '+';
-        mark.title = point.name || `TP${index + 1}`;
+        mark.title = getPairLabel(point, index);
         mark.addEventListener('click', () => showPointDetail(index));
         markerLayer.appendChild(mark);
       });
@@ -342,7 +365,7 @@
       testsDropdown.value = '';
       testsDropdownToggle.textContent = 'Test seçin...';
       testsDropdownSearch.value = '';
-      pointsDropdown.innerHTML = '<option value="">Nokta seçin...</option>';
+      pointsDropdown.innerHTML = '<option value="">Nokta çifti seçin...</option>';
       clearPointDetail();
 
       const response = await fetch('/api/library/tests');
@@ -394,9 +417,11 @@
       imageHint.classList.add('d-none');
       points = data.points.map((point, index) => ({
         name: point.name || `TP${index + 1}`,
+        pair_with: point.pair_with || '',
         description: point.description || '',
         x: Number.parseFloat(point.x),
         y: Number.parseFloat(point.y),
+        is_gnd: point.is_gnd || false,
         measurement: {
           v: point.measurement.v || '',
           f: point.measurement.f || '',
