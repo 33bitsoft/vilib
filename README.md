@@ -1,6 +1,6 @@
 ## VI Library - Kullanim Kilavuzu
 
-Bu proje UCE-CTL321L Component Tester cihazına veri tabanı özelliği kazandırmak için oluşturulmuştur. UCE-CTL321L chiazının ürettiği ekran görüntüleri temizlenerek grafik bilgisi ve ölçüm değerleri sayısal hale getirilir. Üretilen değerler Elektrünik Kart görseli üzerinde işaretlenen test point noktalarına atanarak veri tabanına kayıt edilir. Test aşamasında cihazın ürettiği test sonuçları ile veri tabanındaki kayıtlar karşılaştırılarak arıza kontrolü yapılır.
+Bu proje UCE-CTL321L Component Tester cihazına veri tabanı özelliği kazandırmak için oluşturulmuştur. UCE-CTL321L chiazının ürettiği ekran görüntüleri temizlenerek grafik bilgisi ve ölçüm değerleri sayısal hale getirilir. Üretilen değerler Elektronik Kart görseli üzerinde işaretlenen test point noktalarına atanarak veri tabanına kayıt edilir. Test aşamasında cihazın ürettiği test sonuçları ile veri tabanındaki kayıtlar karşılaştırılarak arıza kontrolü yapılır.
 
 ## Gereksinimler
 
@@ -91,8 +91,6 @@ Gelistirme modunda otomatik yeniden yukleme ile:
 python run.py --reload
 ```
 
-Not: Bu proje FastAPI ile calisir. python backend/manage.py runserver komutu bu proje icin kullanilmamalidir.
-
 ## Hizli Baslatma Ozeti
 
 Linux:
@@ -118,7 +116,7 @@ python run.py
 ## Temel Kullanim Akisi
 
 1. Tarayicida /login sayfasina gidin ve giris yapin.
-2. Ust bardan Kütüphane sayfasini acin.
+2. Üst bardan Kütüphane sayfasini acin.
 3. Yeni test eklemek icin:
 	- Test ismi girin.
 	- Kart fotografi secin.
